@@ -6,13 +6,26 @@
 
 ## Estado al 25/10/2026
 
-- **Actualización 0 terminada.** Sigue la Actualización 1.
+- **Actualización 0 terminada. Actualización 1 publicada**, salvo dos datos que tiene que pasar Matías:
+  la tarifa (`TARIFA` en `compartido/precio.ts`; hasta entonces el precio dice "a confirmar por WhatsApp") y el
+  WhatsApp del servicio (`WHATSAPP` en `compartido/marca.ts`; hasta entonces el botón no aparece). Sigue la Actualización 2.
 - Repo público `matitrova/envios` (la cuenta de GitHub es `matitrova`; `matitrovato` es solo el usuario de la Mac).
-  Lo creó Matías. Cada push a `main` publica solo con Actions (`.github/workflows/publicar.yml`).
+  Cada push a `main` publica solo con Actions (`.github/workflows/publicar.yml`), con `scripts/chequeos.ts` antes del build.
 - Dirección provisoria: https://matitrova.github.io/envios/ (cliente) y https://matitrova.github.io/envios/panel/ (panel).
-  Se verifica con `URL=https://matitrova.github.io/envios/ ../Test1_Inmo/.venv/bin/python scripts/verificar.py`.
-- Firebase, en la cuenta de Google de Matías, plan gratis Spark, sin Analytics ni Gemini, todavía sin apps ni base:
-  `envios-merlo` (el real) y `envios-merlo-pruebas` (para las pruebas automáticas; nunca probar contra el real).
+- Firebase (cuenta de Google de Matías, plan Spark, sin Analytics ni Gemini): `envios-merlo` (real) y
+  `envios-merlo-pruebas`. Firestore Standard en `southamerica-east1` en los dos (São Paulo: desde San Luis respondió
+  ~10 ms más rápido que Santiago). App web `envios-web` registrada en cada uno; la config está en `compartido/firebase.ts`,
+  que elige el proyecto por dominio (solo `matitrova.github.io` va al real).
+- Reglas (`firestore.rules`): el link `?pedido=<ID>` es la llave (get público, list/update/delete negados), create validado.
+  Se suben con `npm run reglas:pruebas` / `npm run reglas:real` (Firebase CLI con versión fija, el proyecto escrito
+  entero; sin `firebase use` ni `.firebaserc`, para que nada caiga en el real por descuido).
+- Cómo se prueba (nunca contra el real):
+  - `python3 scripts/probar_reglas.py`: 31 casos con escrituras de verdad en pruebas, sin sesión.
+  - `npm run build && ../Test1_Inmo/.venv/bin/python scripts/verificar.py`: pedidos de verdad en pruebas, en celular
+    (GPS y toque en el mapa) y computadora (solo referencias y corte de señal), y el link en un navegador limpio.
+  - `URL=https://matitrova.github.io/envios/ ../Test1_Inmo/.venv/bin/python scripts/verificar.py`: la dirección real,
+    solo lectura (no confirma pedidos); corta si al real le faltan las reglas.
+- Pendiente anotado: App Check (reCAPTCHA) antes del piloto; el JS del cliente pesa ~193 kB comprimido (Firebase + Leaflet).
 
 
 ## Contexto
@@ -65,15 +78,15 @@ con fecha en el doc de registro.
 - [x] El control automático de base (Playwright, celular y computadora).
 
 ### Actualización 1: el cliente pide un envío
-- [ ] Qué se lleva: paquete, compras, documentos o comida.
-- [ ] Desde dónde y hasta dónde:
+- [x] Qué se lleva: paquete, compras, documentos o comida.
+- [x] Desde dónde y hasta dónde:
   - un punto en el mapa;
   - "usar mi ubicación";
   - una referencia escrita, por ejemplo "portón verde".
-- [ ] Nombre, teléfono y nota.
-- [ ] Precio estimado antes de confirmar: bajada + kilómetros × precio por km, con un mínimo.
-- [ ] Al confirmar queda una pantalla de seguimiento con el estado en vivo y un link para volver.
-- [ ] Botón de WhatsApp al servicio como respaldo.
+- [x] Nombre, teléfono y nota.
+- [ ] Precio estimado antes de confirmar: bajada + kilómetros × precio por km, con un mínimo. (Hecho y probado; falta la tarifa.)
+- [x] Al confirmar queda una pantalla de seguimiento con el estado en vivo y un link para volver.
+- [ ] Botón de WhatsApp al servicio como respaldo. (Hecho; falta el número.)
 
 ### Actualización 2: tu panel
 - [ ] Tu usuario. La contraseña la elegís vos la primera vez; yo no la escribo.
