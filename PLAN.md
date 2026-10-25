@@ -6,12 +6,13 @@
 
 ## Estado al 25/10/2026
 
-- Hecho (Actualización 0): proyecto local `~/envios-merlo` con cliente (`/`) y panel (`/panel/`), compila;
-  `scripts/verificar.py` (Playwright, celular y computadora) pasa y se probó que detecta un noindex faltante;
-  doc de registro creado. Commits locales, **todavía sin repo en GitHub**.
-- Bloqueado: crear el repo público `matitrovato/envios` lo frenó el control de permisos ("superficie pública").
-  Hace falta que Matías lo autorice (o crear el repo él). GitHub Pages en un repo privado necesita plan pago.
-- Falta de la Actualización 0: proyecto de Firebase real y uno de pruebas; publicación automática y dirección provisoria.
+- **Actualización 0 terminada.** Sigue la Actualización 1.
+- Repo público `matitrova/envios` (la cuenta de GitHub es `matitrova`; `matitrovato` es solo el usuario de la Mac).
+  Lo creó Matías. Cada push a `main` publica solo con Actions (`.github/workflows/publicar.yml`).
+- Dirección provisoria: https://matitrova.github.io/envios/ (cliente) y https://matitrova.github.io/envios/panel/ (panel).
+  Se verifica con `URL=https://matitrova.github.io/envios/ ../Test1_Inmo/.venv/bin/python scripts/verificar.py`.
+- Firebase, en la cuenta de Google de Matías, plan gratis Spark, sin Analytics ni Gemini, todavía sin apps ni base:
+  `envios-merlo` (el real) y `envios-merlo-pruebas` (para las pruebas automáticas; nunca probar contra el real).
 
 
 ## Contexto
@@ -56,12 +57,12 @@ Cada una termina con su control automático, capturas en celular y computadora, 
 con fecha en el doc de registro.
 
 ### Actualización 0: la base
-- [ ] Proyecto nuevo (`~/envios-merlo`, repo `matitrova/envios`) con el armado de tus páginas.
-- [ ] Proyecto de Firebase real y uno de pruebas. Los creo en tu Chrome con tu cuenta de Google; si
+- [x] Proyecto nuevo (`~/envios-merlo`, repo `matitrova/envios`) con el armado de tus páginas.
+- [x] Proyecto de Firebase real y uno de pruebas. Los creo en tu Chrome con tu cuenta de Google; si
       piden algo que solo vos podés hacer, te aviso.
-- [ ] Publicación automática y dirección provisoria.
-- [ ] El doc de registro, con estas actualizaciones como listas para tildar.
-- [ ] El control automático de base (Playwright, celular y computadora).
+- [x] Publicación automática y dirección provisoria.
+- [x] El doc de registro, con estas actualizaciones como listas para tildar.
+- [x] El control automático de base (Playwright, celular y computadora).
 
 ### Actualización 1: el cliente pide un envío
 - [ ] Qué se lleva: paquete, compras, documentos o comida.
