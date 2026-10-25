@@ -1,5 +1,5 @@
-import { addDoc, collection, GeoPoint, serverTimestamp } from "firebase/firestore";
-import { useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { collection, doc, GeoPoint, serverTimestamp, setDoc } from "firebase/firestore";
+import { useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { db } from "../../compartido/firebase";
 import { NOMBRE } from "../../compartido/marca";
 import { TIPOS, type Lugar, type Punto, type Tipo } from "../../compartido/pedido";
@@ -16,7 +16,8 @@ const paraGuardar = (l: Lugar) => ({
   punto: l.punto ? new GeoPoint(l.punto.lat, l.punto.lng) : null,
   referencia: referencia(l),
 });
-export const pesos = (n: number) => "$ " + n.toLocaleString("es-AR");
+export const precioTexto = (n: number | null) =>
+  n !== null ? `$ ${n.toLocaleString("es-AR")} (estimado)` : "A confirmar por WhatsApp";
 
 type Props = { ultimo: string | null; alCrear: (id: string) => void };
 
@@ -39,8 +40,15 @@ export default function Formulario({ ultimo, alCrear }: Props) {
   async function confirmar() {
     setEnviando(true);
     setError("");
+    // Sin señal, Firestore deja el pedido en cola y la promesa no termina hasta que vuelve la conexión:
+    // si tarda, se avisa que no cierre la página (el pedido en cola vive solo en esta pestaña).
+    const lento = setTimeout(
+      () => setError("Sin señal: el pedido se manda solo cuando vuelva la conexión. No cierres esta página."),
+      8000,
+    );
     try {
-      const ref = await addDoc(collection(db, "pedidos"), {
+      const ref = doc(collection(db, "pedidos"));
+      await setDoc(ref, {
         tipo,
         origen: paraGuardar(origen),
         destino: paraGuardar(destino),
@@ -55,6 +63,8 @@ export default function Formulario({ ultimo, alCrear }: Props) {
     } catch {
       setError("No pudimos mandar el pedido. Revisá tu conexión y probá de nuevo.");
       setEnviando(false);
+    } finally {
+      clearTimeout(lento);
     }
   }
 
@@ -159,10 +169,7 @@ export default function Formulario({ ultimo, alCrear }: Props) {
         <Fila nombre="Hasta" valor={describir(destino)} />
         <Fila nombre="A nombre de" valor={`${nombre.trim()} · ${telefono.trim()}`} />
         {nota.trim() && <Fila nombre="Nota" valor={nota.trim()} />}
-        <Fila
-          nombre="Precio"
-          valor={precio !== null ? `${pesos(precio)} (estimado)` : "A confirmar por WhatsApp"}
-        />
+        <Fila nombre="Precio" valor={precioTexto(precio)} />
       </dl>
       {error && <p className="mt-4 text-acento">{error}</p>}
       <div className="mt-6 flex gap-3">
@@ -193,7 +200,7 @@ function describir(l: Lugar) {
   return ref ?? "Marcado en el mapa";
 }
 
-function Fila({ nombre, valor }: { nombre: string; valor: string }) {
+export function Fila({ nombre, valor }: { nombre: string; valor: string }) {
   return (
     <div className="px-4 py-3">
       <dt className="text-sm text-suave">{nombre}</dt>
@@ -264,20 +271,27 @@ type PasoLugarProps = {
 function PasoLugar({ paso, titulo, letra, lugar, otro, cambiar, atras, siguiente }: PasoLugarProps) {
   const [buscando, setBuscando] = useState(false);
   const [aviso, setAviso] = useState("");
+  // Cada pedido de GPS lleva un número: si mientras tanto el cliente tocó el mapa o cambió de paso,
+  // la respuesta que llega tarde se descarta en vez de pisar el punto que eligió.
+  const pedidoGps = useRef(0);
+  useEffect(() => () => void pedidoGps.current++, []);
 
   function usarUbicacion() {
     if (!("geolocation" in navigator)) {
       setAviso("Este navegador no puede darnos tu ubicación. Tocá el mapa o escribí una referencia.");
       return;
     }
+    const n = ++pedidoGps.current;
     setBuscando(true);
     setAviso("");
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        if (n !== pedidoGps.current) return;
         setBuscando(false);
         cambiar((l) => ({ ...l, punto: { lat: pos.coords.latitude, lng: pos.coords.longitude } }));
       },
       (err) => {
+        if (n !== pedidoGps.current) return;
         setBuscando(false);
         setAviso(
           err.code === err.PERMISSION_DENIED
@@ -321,7 +335,11 @@ function PasoLugar({ paso, titulo, letra, lugar, otro, cambiar, atras, siguiente
           a={letra === "a" ? lugar.punto : otro}
           b={letra === "b" ? lugar.punto : otro}
           editar={letra}
-          alMover={(p) => cambiar((l) => ({ ...l, punto: p }))}
+          alMover={(p) => {
+            pedidoGps.current++;
+            setBuscando(false);
+            cambiar((l) => ({ ...l, punto: p }));
+          }}
         />
       </div>
       <div className="px-6 pb-6">

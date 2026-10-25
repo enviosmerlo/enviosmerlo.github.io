@@ -3,7 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { db } from "../../compartido/firebase";
 import { NOMBRE, WHATSAPP } from "../../compartido/marca";
 import { ESTADOS, ID_VALIDO, TIPOS, type Estado, type Tipo } from "../../compartido/pedido";
-import { pesos } from "./Formulario";
+import { Fila, precioTexto } from "./Formulario";
 
 type Guardado = { punto: GeoPoint | null; referencia: string | null };
 type Pedido = {
@@ -84,14 +84,12 @@ export default function Seguimiento({ id }: { id: string }) {
         <Fila nombre="Qué" valor={TIPOS[pedido.tipo]} />
         <Fila nombre="Desde" valor={pedido.origen.referencia ?? "Marcado en el mapa"} />
         <Fila nombre="Hasta" valor={pedido.destino.referencia ?? "Marcado en el mapa"} />
-        <Fila
-          nombre="Precio"
-          valor={pedido.precioEstimado !== null ? `${pesos(pedido.precioEstimado)} (estimado)` : "A confirmar por WhatsApp"}
-        />
+        <Fila nombre="Precio" valor={precioTexto(pedido.precioEstimado)} />
       </dl>
 
       <section className="mt-8">
         <h2 className="font-semibold">Guardá este link para volver</h2>
+        <p className="mt-1 text-sm text-suave">Quien tenga este link puede ver tu nombre, tu teléfono y los lugares del pedido.</p>
         <p className="mt-2 rounded-xl border border-linea bg-white px-4 py-3 text-sm break-all select-all" data-link>
           {link}
         </p>
@@ -130,13 +128,4 @@ export default function Seguimiento({ id }: { id: string }) {
 
 function Marco({ children }: { children: ReactNode }) {
   return <main className="mx-auto min-h-svh max-w-md px-6 py-8">{children}</main>;
-}
-
-function Fila({ nombre, valor }: { nombre: string; valor: string }) {
-  return (
-    <div className="px-4 py-3">
-      <dt className="text-sm text-suave">{nombre}</dt>
-      <dd className="font-medium break-words">{valor}</dd>
-    </div>
-  );
 }

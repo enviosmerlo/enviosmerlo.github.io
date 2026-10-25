@@ -8,13 +8,12 @@ Contra la dirección publicada recorre lo mismo pero NO confirma: nunca crea ped
 Uso:  npm run build && ../Test1_Inmo/.venv/bin/python scripts/verificar.py [carpeta-de-capturas]
 Contra la dirección publicada:  URL=https://matitrova.github.io/envios/ ../Test1_Inmo/.venv/bin/python scripts/verificar.py
 """
+import base64
 import mimetypes
 import os
 import secrets
 import string
-import struct
 import sys
-import zlib
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -27,7 +26,8 @@ PUBLICADA = "URL" in os.environ
 BASE = os.environ.get("URL", "https://envios.test/")
 # Lo que la página tiene que decir en la consola (compartido/firebase.ts). Si no coincide, el control corta.
 BASE_DE_DATOS = "envios-merlo" if PUBLICADA else "envios-merlo-pruebas"
-MERLO = {"latitude": -32.342558, "longitude": -65.0136903}
+# El GPS falso queda a unos 3 km del centro donde arranca el mapa: así se prueba que el mapa va a buscar el punto.
+GPS = {"latitude": -32.37, "longitude": -65.0136903}
 problemas: list[str] = []
 
 
@@ -42,16 +42,9 @@ def servir(route):
         route.fulfill(status=404, body=b"no existe")
 
 
-def png_gris():
-    def bloque(tipo, datos):
-        return struct.pack(">I", len(datos)) + tipo + datos + struct.pack(">I", zlib.crc32(tipo + datos))
-    filas = b"".join(b"\x00" + b"\xdd" * 256 for _ in range(256))
-    return (b"\x89PNG\r\n\x1a\n" + bloque(b"IHDR", struct.pack(">IIBBBBB", 256, 256, 8, 0, 0, 0, 0))
-            + bloque(b"IDAT", zlib.compress(filas)) + bloque(b"IEND", b""))
-
-
 # Los tiles reales no se piden: la política de OSM no quiere navegadores automáticos, y un bloqueo caería en la IP de casa.
-TILE = png_gris()
+# PNG gris de 1x1: Leaflet lo estira al tamaño del tile.
+TILE = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGO4CwAA3wDeKXlwtgAAAABJRU5ErkJggg==")
 
 
 def tiles(route):
@@ -100,14 +93,27 @@ def paso_de_mapa(pg, nombre, cap, n):
     comunes(pg, f"{nombre} paso {n}")
 
 
+def marcador_a_la_vista(pg, nombre, letra):
+    dentro = pg.evaluate("""(letra) => {
+        const m = [...document.querySelectorAll('.leaflet-marker-icon')].find(e => e.textContent.trim() === letra);
+        if (!m) return false;
+        const r = m.getBoundingClientRect(), c = document.querySelector('[data-mapa]').getBoundingClientRect();
+        return r.left >= c.left && r.right <= c.right && r.top >= c.top && r.bottom <= c.bottom;
+    }""", letra)
+    if not dentro:
+        problemas.append(f"{nombre}: el punto {letra} no quedó a la vista dentro del mapa")
+
+
 def conectada_a(consola):
     return next((m.split("conectado a ")[1] for m in consola if m.startswith("Firebase: conectado a ")), None)
 
 
-def confirmar(pg, nombre, consola, cap):
+def confirmar(pg, nombre, consola, cap, sin_senal=False):
     base = conectada_a(consola)
     if base != "envios-merlo-pruebas":
         sys.exit(f"{nombre}: la página está conectada a {base!r} y no a envios-merlo-pruebas. Corto sin crear el pedido.")
+    if sin_senal:
+        pg.context.set_offline(True)
     # Se toca y se mira el botón en el mismo cuadro: con mala señal, un segundo toque no tiene que mandar otro pedido.
     deshabilitado = pg.evaluate("""async () => {
         const b = [...document.querySelectorAll('button')].find(b => b.textContent.includes('Confirmar pedido'));
@@ -117,7 +123,12 @@ def confirmar(pg, nombre, consola, cap):
     }""")
     if not deshabilitado:
         problemas.append(f"{nombre}: Confirmar no se deshabilita mientras se manda el pedido")
-    expect(pg.locator("h1[data-estado=recibido]")).to_be_visible(timeout=20000)
+    if sin_senal:
+        # Sin red el pedido queda en cola: hay que avisar que no cierre la página, y mandarlo solo al volver la señal.
+        expect(pg.get_by_text("Sin señal: el pedido se manda solo")).to_be_visible(timeout=15000)
+        cap("5-sin-senal")
+        pg.context.set_offline(False)
+    expect(pg.locator("h1[data-estado=recibido]")).to_be_visible(timeout=60000 if sin_senal else 20000)
     link = pg.locator("[data-link]").inner_text().strip()
     if not link.startswith(BASE + "?pedido=") or pg.url != link:
         problemas.append(f"{nombre}: el link del pedido no es el esperado: {link} (dirección: {pg.url})")
@@ -133,12 +144,15 @@ def pedido_con_mapa(pg, nombre, consola, cap):
     pg.get_by_role("button", name="Paquete").click()
     pg.get_by_role("button", name="Usar mi ubicación").click()
     expect(pg.get_by_text("Podés arrastrar el punto")).to_be_visible()
+    marcador_a_la_vista(pg, nombre, "A")
     paso_de_mapa(pg, nombre, cap, 2)
     pg.get_by_role("button", name="Siguiente").click()
     mapa = pg.locator("[data-mapa]")
     caja = mapa.bounding_box()
-    mapa.click(position={"x": caja["width"] * 0.7, "y": caja["height"] * 0.35})
+    # Un toque de verdad (eventos touch), no un click de mouse: así lo recibe Leaflet en el celular.
+    mapa.tap(position={"x": caja["width"] * 0.7, "y": caja["height"] * 0.35})
     expect(pg.get_by_text("Podés arrastrar el punto")).to_be_visible()
+    marcador_a_la_vista(pg, nombre, "B")
     paso_de_mapa(pg, nombre, cap, 3)
     pg.get_by_role("button", name="Siguiente").click()
     pg.get_by_label("Tu nombre").fill("Control automático")
@@ -171,7 +185,7 @@ def pedido_con_referencias(pg, nombre, consola, cap):
     expect(pg.get_by_text("A confirmar por WhatsApp")).to_be_visible()
     cap("5-revisar")
     comunes(pg, f"{nombre} revisar")
-    return None if PUBLICADA else confirmar(pg, nombre, consola, cap)
+    return None if PUBLICADA else confirmar(pg, nombre, consola, cap, sin_senal=True)
 
 
 def no_encontrado(pg, nombre, cap):
@@ -193,7 +207,7 @@ def panel(pg, nombre, consola, cap):
 
 DISPOSITIVOS = {
     "movil": dict(viewport={"width": 390, "height": 844}, device_scale_factor=2, is_mobile=True, has_touch=True,
-                  permissions=["geolocation"], geolocation=MERLO),
+                  permissions=["geolocation"], geolocation=GPS),
     "pc": dict(viewport={"width": 1440, "height": 900}),
 }
 RECORRIDOS = {"movil": pedido_con_mapa, "pc": pedido_con_referencias}
@@ -211,7 +225,9 @@ def recorrer(ctx, nombre, funcion):
     pg = ctx.new_page()
     errores: list[str] = []
     consola: list[str] = []
-    pg.on("console", lambda m: (consola.append(m.text), m.type == "error" and errores.append(m.text)))
+    # ERR_INTERNET_DISCONNECTED lo provoca el corte de red simulado de la prueba sin señal, no la app.
+    pg.on("console", lambda m: (consola.append(m.text), m.type == "error" and "ERR_INTERNET_DISCONNECTED" not in m.text
+                                and errores.append(m.text)))
     pg.on("pageerror", lambda e: errores.append(str(e)))
     pg.on("response", lambda r: r.status >= 400 and r.url.startswith(BASE) and errores.append(f"{r.status} {r.url}"))
     resultado = funcion(pg, nombre, consola, lambda n: pg.screenshot(path=str(OUT / f"{nombre}-{n}.png")))
