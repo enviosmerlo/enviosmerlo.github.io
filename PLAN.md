@@ -56,7 +56,7 @@ Cada una termina con su control automático, capturas en celular y computadora, 
 con fecha en el doc de registro.
 
 ### Actualización 0: la base
-- [ ] Proyecto nuevo (`~/envios-merlo`, repo `matitrovato/envios`) con el armado de tus páginas.
+- [ ] Proyecto nuevo (`~/envios-merlo`, repo `matitrova/envios`) con el armado de tus páginas.
 - [ ] Proyecto de Firebase real y uno de pruebas. Los creo en tu Chrome con tu cuenta de Google; si
       piden algo que solo vos podés hacer, te aviso.
 - [ ] Publicación automática y dirección provisoria.

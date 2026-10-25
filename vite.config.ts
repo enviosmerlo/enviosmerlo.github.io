@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { defineConfig } from "vite";
 
 // Dos pantallas: la del cliente (la raíz) y el panel del operador (/panel/).
-// base './' para que ande igual en matitrovato.github.io/envios/ y en un dominio propio.
+// base './' para que ande igual en matitrova.github.io/envios/ y en un dominio propio.
 export default defineConfig({
   base: "./",
   plugins: [react(), tailwindcss()],

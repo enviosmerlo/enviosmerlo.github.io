@@ -2,8 +2,10 @@
 Playwright sirve los archivos desde dist/, sin servidor. Saca capturas y termina con error si algo no anda.
 
 Uso:  npm run build && ../Test1_Inmo/.venv/bin/python scripts/verificar.py [carpeta-de-capturas]
+Contra la dirección publicada:  URL=https://matitrova.github.io/envios/ ../Test1_Inmo/.venv/bin/python scripts/verificar.py
 """
 import mimetypes
+import os
 import sys
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -12,7 +14,7 @@ from playwright.sync_api import sync_playwright
 
 DIST = Path(__file__).resolve().parent.parent / "dist"
 OUT = Path(sys.argv[1] if len(sys.argv) > 1 else "capturas")
-BASE = "http://envios.test/"
+BASE = os.environ.get("URL", "http://envios.test/")
 problemas: list[str] = []
 
 
@@ -72,14 +74,15 @@ DISPOSITIVOS = {
     "pc": dict(viewport={"width": 1440, "height": 900}),
 }
 
-if not (DIST / "index.html").is_file():
+if "URL" not in os.environ and not (DIST / "index.html").is_file():
     sys.exit("Falta dist/: corré antes npm run build")
 OUT.mkdir(parents=True, exist_ok=True)
 with sync_playwright() as p:
     nav = p.chromium.launch()
     for disp, opciones in DISPOSITIVOS.items():
         ctx = nav.new_context(**opciones, locale="es-AR", timezone_id="America/Argentina/San_Luis")
-        ctx.route("http://envios.test/**", servir)
+        if "URL" not in os.environ:
+            ctx.route("http://envios.test/**", servir)
         for pantalla, recorrer in PANTALLAS.items():
             nombre = f"{pantalla}-{disp}"
             pg = ctx.new_page()
