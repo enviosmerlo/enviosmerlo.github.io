@@ -1,0 +1,25 @@
+@import "tailwindcss" source(none);
+@source "../cliente";
+@source "../panel";
+@source "./";
+
+/* Colores provisorios hasta la actualización de marca */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --color-fondo: #f7f5f0;
+  --color-tinta: #1b1b1f;
+  --color-suave: #66656d;
+  --color-acento: #ff5a1f;
+  --color-linea: rgb(27 27 31 / 0.12);
+}
+
+html {
+  background: var(--color-fondo);
+  color: var(--color-tinta);
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
