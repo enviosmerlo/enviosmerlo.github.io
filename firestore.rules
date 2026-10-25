@@ -1,0 +1,44 @@
+rules_version = '2';
+
+// Pedidos sin cuenta. El link de seguimiento es la llave: lleva el ID del pedido (20 caracteres al azar),
+// así que quien lo tiene lo lee, y nadie puede listar la colección para ver los de otros.
+// Cambiar, cancelar y ver todos queda para el panel del operador (Actualización 2).
+// Las mismas reglas van a envios-merlo-pruebas y a envios-merlo: npm run reglas:pruebas / reglas:real.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /pedidos/{id} {
+      allow get: if true;
+      allow create: if id.matches('[A-Za-z0-9]{20}') && pedidoNuevo(request.resource.data);
+    }
+
+    function pedidoNuevo(p) {
+      return p.keys().hasOnly(['tipo', 'origen', 'destino', 'nombre', 'telefono', 'nota', 'precioEstimado', 'estado', 'creado'])
+        && p.keys().hasAll(['tipo', 'origen', 'destino', 'nombre', 'telefono', 'nota', 'precioEstimado', 'estado', 'creado'])
+        && p.tipo in ['paquete', 'compras', 'documentos', 'comida']
+        && lugar(p.origen)
+        && lugar(p.destino)
+        && texto(p.nombre, 2, 60)
+        // Mismo formato que arma compartido/telefono.ts (549 + 10 dígitos); scripts/chequeos.ts lee esta regex.
+        && p.telefono is string && p.telefono.matches('549[0-9]{10}')
+        && texto(p.nota, 0, 300)
+        // Estimado y sin validar la cuenta: lo confirma el operador. null = "a confirmar".
+        && (p.precioEstimado == null || (p.precioEstimado is number && p.precioEstimado >= 0 && p.precioEstimado <= 10000000))
+        && p.estado == 'recibido'
+        && p.creado == request.time;
+    }
+
+    // Un punto en el mapa, una referencia escrita, o los dos. Siempre con las dos claves (null si falta).
+    function lugar(m) {
+      return m is map
+        && m.keys().hasOnly(['punto', 'referencia'])
+        && m.keys().hasAll(['punto', 'referencia'])
+        && (m.punto == null || m.punto is latlng)
+        && (m.referencia == null || texto(m.referencia, 2, 200))
+        && (m.punto != null || m.referencia != null);
+    }
+
+    function texto(s, min, max) {
+      return s is string && s.size() >= min && s.size() <= max;
+    }
+  }
+}
