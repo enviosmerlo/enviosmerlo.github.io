@@ -4,6 +4,7 @@ import { db } from "../../compartido/firebase";
 import { NOMBRE } from "../../compartido/marca";
 import { TIPOS, type Lugar, type Punto, type Tipo } from "../../compartido/pedido";
 import { precioEstimado } from "../../compartido/precio";
+import { tarifaDe, useServicio } from "../../compartido/servicio";
 import { normalizarTelefono } from "../../compartido/telefono";
 import Mapa from "./Mapa";
 
@@ -16,8 +17,8 @@ const paraGuardar = (l: Lugar) => ({
   punto: l.punto ? new GeoPoint(l.punto.lat, l.punto.lng) : null,
   referencia: referencia(l),
 });
-export const precioTexto = (n: number | null) =>
-  n !== null ? `$ ${n.toLocaleString("es-AR")} (estimado)` : "A confirmar por WhatsApp";
+export const pesos = (n: number) => `$ ${n.toLocaleString("es-AR")}`;
+export const precioTexto = (n: number | null) => (n !== null ? `${pesos(n)} (estimado)` : "A confirmar por WhatsApp");
 
 type Props = { ultimo: string | null; alCrear: (id: string) => void };
 
@@ -35,7 +36,8 @@ export default function Formulario({ ultimo, alCrear }: Props) {
 
   const celular = normalizarTelefono(telefono);
   const datosListos = nombre.trim().length >= 2 && celular !== null;
-  const precio = precioEstimado(origen.punto, destino.punto);
+  const servicio = useServicio();
+  const precio = precioEstimado(origen.punto, destino.punto, tarifaDe(servicio));
 
   async function confirmar() {
     setEnviando(true);

@@ -2,20 +2,27 @@
 Playwright sirve los archivos desde dist/, sin servidor. Saca capturas y termina con error si algo no anda.
 
 En local hace pedidos de verdad en el proyecto de PRUEBAS: en el celular con "Usar mi ubicación" y tocando el mapa,
-en la computadora solo con referencias escritas. Después abre el link del pedido en un navegador limpio.
-Contra la dirección publicada recorre lo mismo pero NO confirma: nunca crea pedidos en el proyecto real.
+en la computadora solo con referencias escritas y un corte de señal. El panel (otro navegador, con el operador de prueba
+de cuentas_prueba.py) los ve llegar como nuevos, asigna, cambia estados y cancela, y el cliente lo ve en vivo.
+Contra la dirección publicada recorre lo mismo pero NO confirma ni entra al panel: nunca escribe en el proyecto real.
 
 Uso:  npm run build && ../Test1_Inmo/.venv/bin/python scripts/verificar.py [carpeta-de-capturas]
 Contra la dirección publicada:  URL=https://matitrova.github.io/envios/ ../Test1_Inmo/.venv/bin/python scripts/verificar.py
 """
 import base64
+import json
 import mimetypes
 import os
 import secrets
 import string
 import sys
+import time
+import urllib.error
+import urllib.request
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from playwright.sync_api import expect, sync_playwright
 
@@ -132,6 +139,10 @@ def confirmar(pg, nombre, consola, cap, sin_senal=False):
     link = pg.locator("[data-link]").inner_text().strip()
     if not link.startswith(BASE + "?pedido=") or pg.url != link:
         problemas.append(f"{nombre}: el link del pedido no es el esperado: {link} (dirección: {pg.url})")
+    # El aviso al servicio: el botón manda a su WhatsApp el link del pedido.
+    href = pg.locator("[data-whatsapp]").get_attribute("href") or ""
+    if not href.startswith(f"https://wa.me/{SERVICIO['whatsapp']}?") or link not in parse_qs(urlparse(href).query).get("text", [""])[0]:
+        problemas.append(f"{nombre}: el botón Avisar por WhatsApp no lleva al servicio con el link del pedido: {href}")
     cap("6-seguimiento")
     comunes(pg, f"{nombre} seguimiento")
     return link
@@ -161,6 +172,8 @@ def pedido_con_mapa(pg, nombre, consola, cap):
     comunes(pg, f"{nombre} datos")
     pg.get_by_role("button", name="Siguiente").click()
     expect(pg.get_by_text("Revisá tu pedido")).to_be_visible()
+    if not PUBLICADA:  # con la tarifa de prueba (mínimo 98765) el estimado no depende de dónde cayeron los puntos
+        expect(pg.get_by_text("$ 98.765 (estimado)")).to_be_visible()
     cap("5-revisar")
     comunes(pg, f"{nombre} revisar")
     return None if PUBLICADA else confirmar(pg, nombre, consola, cap)
@@ -197,12 +210,126 @@ def no_encontrado(pg, nombre, cap):
     comunes(pg, f"{nombre} no encontrado")
 
 
-def panel(pg, nombre, consola, cap):
+# --- Datos de prueba por REST, siempre en pruebas (cuentas_prueba fija el proyecto y la clave).
+API = "https://firestore.googleapis.com/v1/projects/envios-merlo-pruebas/databases/(default)/documents"
+SERVICIO = {"bajada": 1, "porKm": 1, "minimo": 98765, "factor": 1.3, "whatsapp": "5492656000000"}
+
+
+def rest(metodo, ruta, cuerpo=None):
+    req = urllib.request.Request(f"{API}/{ruta}", method=metodo, data=json.dumps(cuerpo).encode() if cuerpo else None,
+                                 headers={"Content-Type": "application/json", "Authorization": f"Bearer {cuentas_prueba.token('operador')}"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.load(r)
+
+
+def preparar_servicio():
+    # Una tarifa conocida al empezar: probar_reglas.py y corridas anteriores la dejan como sea.
+    campos = {k: {"integerValue": str(v)} if isinstance(v, int) else {"doubleValue": v} if isinstance(v, float) else {"stringValue": v}
+              for k, v in SERVICIO.items()}
+    rest("PATCH", "config/servicio", {"fields": campos})
+
+
+# --- Panel
+def entrar_al_panel(pg, nombre, consola, cap, rol="operador"):
     pg.goto(BASE + "panel/", wait_until="load")
-    cap("1-inicio")
-    if not pg.locator("h1").count():
-        problemas.append(f"{nombre}: el panel no tiene título")
-    comunes(pg, nombre)
+    expect(pg.get_by_label("Email")).to_be_visible()
+    if PUBLICADA:
+        cap("login")
+        comunes(pg, f"{nombre} login")
+        return
+    if conectada_a(consola) != "envios-merlo-pruebas":
+        sys.exit(f"{nombre}: el panel está conectado a {conectada_a(consola)!r} y no a envios-merlo-pruebas. Corto sin entrar.")
+    cuenta = cuentas_prueba.cuentas()[rol]
+    pg.get_by_label("Email").fill(cuenta["email"])
+    pg.get_by_label("Contraseña").fill(cuenta["clave"])
+    pg.get_by_role("button", name="Entrar").click()
+    expect(pg.locator("[data-cargado], [data-cartel]").first).to_be_visible(timeout=20000)
+
+
+def activar_avisos(pg, nombre, tocar):
+    tocar(pg.get_by_role("button", name="Activar avisos"))
+    expect(pg.get_by_role("button", name="Activar avisos")).to_have_count(0)
+
+
+def alta_motoquero(pg, nombre, tocar, cap):
+    tocar(pg.get_by_role("button", name="Motoqueros", exact=True))
+    moto, local = f"Moto {secrets.token_hex(3)}", str(100000 + secrets.randbelow(900000))
+    pg.get_by_label("Nombre").fill(moto)
+    pg.get_by_label("Celular").fill(f"2656 15 {local}")
+    tocar(pg.get_by_role("button", name="Agregar"))
+    item = pg.locator(f'[data-motoquero="{moto}"]')
+    expect(item.get_by_label("Activo hoy")).to_be_checked()
+    # "Activo hoy" es la fecha de Argentina, no la de UTC (después de las 21 h ya sería mañana).
+    # La casilla se tilda con la escritura local: se espera a que el servidor la tenga antes de leerla.
+    hoy_ar = datetime.now(ZoneInfo("America/Argentina/San_Luis")).date().isoformat()
+    for _ in range(10):
+        guardado = [d for d in rest("GET", "motoqueros?pageSize=300").get("documents", [])
+                    if d["fields"]["nombre"]["stringValue"] == moto]
+        if guardado:
+            break
+        time.sleep(1)
+    if not guardado or guardado[0]["fields"]["activoEl"].get("stringValue") != hoy_ar:
+        problemas.append(f"{nombre}: el motoquero no quedó activo con la fecha de hoy en Argentina ({hoy_ar})")
+    cap("motoqueros")
+    comunes(pg, f"{nombre} motoqueros")
+    tocar(pg.get_by_role("button", name="Pedidos", exact=True))
+    return moto, f"5492656{local}"
+
+
+def asignar_y_entregar(pp, pc, id_, moto, celular_moto, nombre, tocar, cap_p, cap_c):
+    tarjeta = pp.locator(f'li[data-id="{id_}"]')
+    tarjeta.get_by_label("Quién lo lleva").select_option(label=moto)
+    precio = tarjeta.get_by_label("Precio en pesos")
+    expect(precio).to_have_value(str(SERVICIO["minimo"]))  # arranca en el estimado
+    precio.fill("3500")
+    tocar(tarjeta.get_by_role("button", name="Asignar", exact=True))
+    expect(tarjeta).to_have_attribute("data-estado", "asignado")
+    href = tarjeta.locator("[data-whatsapp-motoquero]").get_attribute("href") or ""
+    url, texto = urlparse(href), parse_qs(urlparse(href).query).get("text", [""])[0]
+    for falta, ok in (("su celular", url.netloc == "wa.me" and url.path == f"/{celular_moto}"),
+                      ("el link de seguimiento", f"{BASE}?pedido={id_}" in texto), ("el cliente", "Control automático" in texto),
+                      ("el mapa", "https://www.google.com/maps/dir/?api=1&destination=" in texto), ("el precio", "$ 3.500" in texto)):
+        if not ok:
+            problemas.append(f"{nombre}: el WhatsApp al motoquero no lleva {falta}: {href[:200]}")
+    cap_p("2-asignado")
+    comunes(pp, f"{nombre} asignado")
+    expect(pc.locator("h1[data-estado=asignado]")).to_be_visible(timeout=20000)
+    expect(pc.locator("[data-motoquero]")).to_contain_text(moto)
+    expect(pc.get_by_text("$ 3.500", exact=True)).to_be_visible()
+    cap_c("7-asignado")
+    for boton, estado in (("En camino", "en_camino"), ("Entregado", "entregado")):
+        tocar(tarjeta.get_by_role("button", name=boton, exact=True))
+        expect(pc.locator(f"h1[data-estado={estado}]")).to_be_visible(timeout=20000)
+    cap_c("8-entregado")
+
+
+def cancelar(pp, pc, id_, nombre, tocar, cap_c):
+    tarjeta = pp.locator(f'li[data-id="{id_}"]')
+    tocar(tarjeta.get_by_role("button", name="Cancelar pedido"))
+    motivo = "Prueba de cancelación del control"
+    tarjeta.get_by_label("Motivo de la cancelación").fill(motivo)
+    tocar(tarjeta.get_by_role("button", name="Confirmar cancelación"))
+    expect(pc.locator("h1[data-estado=cancelado]")).to_be_visible(timeout=20000)
+    expect(pc.get_by_text(motivo)).to_be_visible()
+    cap_c("7-cancelado")
+
+
+def tarifa(pp, nombre, tocar, cap):
+    tocar(pp.get_by_role("button", name="Tarifa", exact=True))
+    expect(pp.get_by_label("Mínimo ($)")).to_have_value(str(SERVICIO["minimo"]))
+    pp.get_by_label("Mínimo ($)").fill(str(SERVICIO["minimo"]))
+    tocar(pp.get_by_role("button", name="Guardar"))
+    expect(pp.get_by_text("Guardado.")).to_be_visible()
+    cap("3-tarifa")
+    comunes(pp, f"{nombre} tarifa")
+
+
+def baja_motoquero(pp, moto, tocar):
+    tocar(pp.get_by_role("button", name="Motoqueros", exact=True))
+    item = pp.locator(f'[data-motoquero="{moto}"]')
+    tocar(item.get_by_role("button", name="Dar de baja"))
+    tocar(item.get_by_role("button", name="Sí, dar de baja"))
+    expect(item).to_have_count(0)
 
 
 DISPOSITIVOS = {
@@ -221,7 +348,11 @@ def contexto(nav, opciones):
     return ctx
 
 
-def recorrer(ctx, nombre, funcion):
+paginas = []
+
+
+def abrir(ctx, nombre):
+    """Página que junta sus errores y su consola; al final se revisa a qué base se conectó."""
     pg = ctx.new_page()
     errores: list[str] = []
     consola: list[str] = []
@@ -230,48 +361,94 @@ def recorrer(ctx, nombre, funcion):
                                 and errores.append(m.text)))
     pg.on("pageerror", lambda e: errores.append(str(e)))
     pg.on("response", lambda r: r.status >= 400 and r.url.startswith(BASE) and errores.append(f"{r.status} {r.url}"))
-    resultado = funcion(pg, nombre, consola, lambda n: pg.screenshot(path=str(OUT / f"{nombre}-{n}.png")))
-    base = conectada_a(consola)
-    if "panel" not in nombre and base != BASE_DE_DATOS:
-        problemas.append(f"{nombre}: la página está conectada a {base!r} y tendría que estar en {BASE_DE_DATOS}")
-    problemas.extend(f"{nombre}: {e}" for e in errores)
-    pg.close()
-    print(f"{nombre} recorrida")
-    return resultado
+    paginas.append((nombre, consola, errores))
+    return pg, consola, lambda n: pg.screenshot(path=str(OUT / f"{nombre}-{n}.png"))
+
+
+def revisar_paginas():
+    for nombre, consola, errores in paginas:
+        if conectada_a(consola) != BASE_DE_DATOS:
+            problemas.append(f"{nombre}: la página está conectada a {conectada_a(consola)!r} y tendría que estar en {BASE_DE_DATOS}")
+        problemas.extend(f"{nombre}: {e}" for e in errores)
 
 
 if not PUBLICADA and not (DIST / "index.html").is_file():
     sys.exit("Falta dist/: corré antes npm run build")
 if PUBLICADA:
-    # Solo lectura: con las reglas subidas, un pedido que no existe da 404; si da 403, al real le faltan las reglas.
-    import urllib.error, urllib.request
-    try:
-        urllib.request.urlopen("https://firestore.googleapis.com/v1/projects/envios-merlo/databases/(default)/documents/pedidos/"
-                               + "".join(secrets.choice(string.ascii_letters) for _ in range(20)), timeout=30)
-        problemas.append("el real devolvió un pedido inventado")
-    except urllib.error.HTTPError as e:
-        if e.code != 404:
-            sys.exit(f"envios-merlo responde {e.code} a un pedido que no existe: faltan las reglas (npm run reglas:real).")
+    # Solo lectura. Con las reglas de la Actualización 2, /config/servicio se lee (200, o 404 si todavía no se cargó);
+    # con las viejas da 403. Las reglas recién subidas tardan hasta un minuto.
+    for intento in range(12):
+        try:
+            urllib.request.urlopen("https://firestore.googleapis.com/v1/projects/envios-merlo/databases/(default)/documents/config/servicio", timeout=30)
+            break
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                break
+            if intento == 11:
+                sys.exit(f"envios-merlo responde {e.code} a /config/servicio: faltan las reglas nuevas (npm run reglas:real).")
+            time.sleep(10)
+else:
+    import cuentas_prueba
+    preparar_servicio()
 OUT.mkdir(parents=True, exist_ok=True)
 print(f"Dirección: {BASE} · base esperada: {BASE_DE_DATOS} · {'solo lectura' if PUBLICADA else 'crea pedidos de prueba'}")
 with sync_playwright() as p:
     nav = p.chromium.launch()
     for disp, opciones in DISPOSITIVOS.items():
-        ctx = contexto(nav, opciones)
-        link = recorrer(ctx, f"cliente-{disp}", RECORRIDOS[disp])
-        recorrer(ctx, f"cliente-{disp}", lambda pg, n, c, cap: no_encontrado(pg, n, cap))
-        recorrer(ctx, f"panel-{disp}", panel)
-        ctx.close()
-        if link:
-            # El link en un navegador limpio (sin el pedido guardado ni la escritura local de Firestore):
-            # prueba que ?pedido= anda y que el pedido quedó en el servidor.
+        tocar = (lambda l: l.tap()) if disp == "movil" else (lambda l: l.click())
+        ctx_cliente, ctx_panel = contexto(nav, opciones), contexto(nav, opciones)
+        if PUBLICADA:
+            pc, cc, cap_c = abrir(ctx_cliente, f"cliente-{disp}")
+            RECORRIDOS[disp](pc, f"cliente-{disp}", cc, cap_c)
+            no_encontrado(pc, f"cliente-{disp}", cap_c)
+            pp, cp, cap_p = abrir(ctx_panel, f"panel-{disp}")
+            entrar_al_panel(pp, f"panel-{disp}", cp, cap_p)
+        else:
+            # El panel abre primero: el pedido tiene que llegarle en vivo y como nuevo, no en la carga inicial.
+            pp, cp, cap_p = abrir(ctx_panel, f"panel-{disp}")
+            entrar_al_panel(pp, f"panel-{disp}", cp, cap_p)
+            activar_avisos(pp, f"panel-{disp}", tocar)
+            cap_p("1-pedidos")
+            comunes(pp, f"panel-{disp} pedidos")
+            moto = alta_motoquero(pp, f"panel-{disp}", tocar, cap_p) if disp == "movil" else None
+            sonidos = int(pp.evaluate("document.body.dataset.sonidos || '0'"))
+            pc, cc, cap_c = abrir(ctx_cliente, f"cliente-{disp}")
+            link = RECORRIDOS[disp](pc, f"cliente-{disp}", cc, cap_c)
+            id_ = link.split("pedido=")[1]
+            expect(pp.locator(f'li[data-id="{id_}"]')).to_have_attribute("data-nuevo", "true", timeout=60000)
+            if int(pp.evaluate("document.body.dataset.sonidos || '0'")) <= sonidos:
+                problemas.append(f"panel-{disp}: llegó un pedido nuevo y no sonó")
+            if not pp.title().startswith("("):
+                problemas.append(f"panel-{disp}: el título no cuenta los pedidos que esperan: {pp.title()}")
+            cap_p("1-nuevo")
+            if moto:
+                asignar_y_entregar(pp, pc, id_, *moto, f"panel-{disp}", tocar, cap_p, cap_c)
+                baja_motoquero(pp, moto[0], tocar)
+            else:
+                cancelar(pp, pc, id_, f"panel-{disp}", tocar, cap_c)
+                tarifa(pp, f"panel-{disp}", tocar, cap_p)
+            final = pc.locator("h1[data-estado]").get_attribute("data-estado")
+            no_encontrado(pc, f"cliente-{disp}", cap_c)
+            # El link en un navegador limpio (sin el pedido guardado ni la escritura local de Firestore).
             limpio = contexto(nav, opciones)
-            recorrer(limpio, f"link-{disp}", lambda pg, n, c, cap: (
-                pg.goto(link, wait_until="load"),
-                expect(pg.locator("h1[data-estado=recibido]")).to_be_visible(timeout=20000),
-                cap("abierto")))
+            pl, _, cap_l = abrir(limpio, f"link-{disp}")
+            pl.goto(link, wait_until="load")
+            expect(pl.locator(f"h1[data-estado={final}]")).to_be_visible(timeout=20000)
+            cap_l("abierto")
             limpio.close()
+        ctx_cliente.close()
+        ctx_panel.close()
+        print(f"{disp} recorrido")
+    if not PUBLICADA:
+        # Logueado pero sin permiso: un cartel, no una lista vacía.
+        ctx = contexto(nav, DISPOSITIVOS["pc"])
+        pi, ci, cap_i = abrir(ctx, "panel-intruso")
+        entrar_al_panel(pi, "panel-intruso", ci, cap_i, rol="intruso")
+        expect(pi.locator("[data-cartel]")).to_contain_text("no tiene permiso")
+        cap_i("cartel")
+        ctx.close()
     nav.close()
+revisar_paginas()
 
 if problemas:
     print("PROBLEMAS:")

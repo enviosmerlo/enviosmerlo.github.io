@@ -1,13 +1,9 @@
 // Precio estimado: bajada + km × precio por km, con un mínimo. Los km son la línea recta × un factor por las calles.
 // Es estimado: lo confirma el operador.
 
-export type Tarifa = { bajada: number; porKm: number; minimo: number };
+// La carga el operador en el panel (/config/servicio, ver compartido/servicio.ts).
+export type Tarifa = { bajada: number; porKm: number; minimo: number; factor: number };
 type Punto = { lat: number; lng: number };
-
-// ponytail: null hasta que Matías pase la tarifa real; mientras, la pantalla dice "a confirmar".
-// En la Actualización 2 pasa al panel, editable.
-export const TARIFA: Tarifa | null = null;
-export const FACTOR_CALLES = 1.3;
 
 // Distancia en línea recta (haversine), en km.
 export function kmEnLinea(a: Punto, b: Punto): number {
@@ -20,8 +16,8 @@ export function kmEnLinea(a: Punto, b: Punto): number {
 
 // null = "a confirmar": falta la tarifa o alguno de los dos puntos en el mapa.
 // ponytail: redondea al peso; el redondeo comercial se define con la tarifa.
-export function precioEstimado(a: Punto | null, b: Punto | null, tarifa: Tarifa | null = TARIFA): number | null {
+export function precioEstimado(a: Punto | null, b: Punto | null, tarifa: Tarifa | null): number | null {
   if (!tarifa || !a || !b) return null;
-  const km = kmEnLinea(a, b) * FACTOR_CALLES;
+  const km = kmEnLinea(a, b) * tarifa.factor;
   return Math.round(Math.max(tarifa.minimo, tarifa.bajada + km * tarifa.porKm));
 }

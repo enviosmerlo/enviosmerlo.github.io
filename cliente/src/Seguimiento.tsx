@@ -1,18 +1,11 @@
-import { doc, onSnapshot, type GeoPoint } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { useEffect, useState, type ReactNode } from "react";
 import { db } from "../../compartido/firebase";
-import { NOMBRE, WHATSAPP } from "../../compartido/marca";
-import { ESTADOS, ID_VALIDO, TIPOS, type Estado, type Tipo } from "../../compartido/pedido";
-import { Fila, precioTexto } from "./Formulario";
+import { NOMBRE } from "../../compartido/marca";
+import { ESTADOS, ID_VALIDO, linkDelPedido, TIPOS, type Estado, type Pedido } from "../../compartido/pedido";
+import { useServicio } from "../../compartido/servicio";
+import { Fila, pesos, precioTexto } from "./Formulario";
 
-type Guardado = { punto: GeoPoint | null; referencia: string | null };
-type Pedido = {
-  tipo: Tipo;
-  origen: Guardado;
-  destino: Guardado;
-  precioEstimado: number | null;
-  estado: Estado;
-};
 const AVANCE: Estado[] = ["recibido", "asignado", "en_camino", "entregado"];
 
 // Pantalla que abre el link del pedido: el estado se actualiza solo cuando el operador lo cambia.
@@ -21,7 +14,8 @@ export default function Seguimiento({ id }: { id: string }) {
   const [pedido, setPedido] = useState<Pedido | null>(null);
   const [noEsta, setNoEsta] = useState(!valido);
   const [copiado, setCopiado] = useState(false);
-  const link = new URL(`?pedido=${id}`, location.href).href;
+  const { whatsapp } = useServicio();
+  const link = linkDelPedido(id, location.href);
 
   useEffect(() => {
     if (!valido) return;
@@ -80,11 +74,29 @@ export default function Seguimiento({ id }: { id: string }) {
         </ol>
       )}
 
+      {pedido.estado === "cancelado" && pedido.motivo && <p className="mt-3 text-lg">{pedido.motivo}</p>}
+      {pedido.motoquero && pedido.estado !== "cancelado" && (
+        <p className="mt-4 text-lg" data-motoquero>
+          Te lo lleva <strong>{pedido.motoquero.nombre}</strong>
+        </p>
+      )}
+
+      {/* Aviso al servicio: le llega por WhatsApp aunque tenga el celular bloqueado. */}
+      {whatsapp && (
+        <a
+          href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(`Hola, hice un pedido: ${link}`)}`}
+          className="mt-6 block w-full rounded-xl bg-acento py-4 text-center text-lg font-semibold text-white"
+          data-whatsapp
+        >
+          {pedido.estado === "recibido" ? "Avisar por WhatsApp" : "Escribinos por WhatsApp"}
+        </a>
+      )}
+
       <dl className="mt-8 divide-y divide-linea rounded-2xl border border-linea bg-white">
         <Fila nombre="Qué" valor={TIPOS[pedido.tipo]} />
         <Fila nombre="Desde" valor={pedido.origen.referencia ?? "Marcado en el mapa"} />
         <Fila nombre="Hasta" valor={pedido.destino.referencia ?? "Marcado en el mapa"} />
-        <Fila nombre="Precio" valor={precioTexto(pedido.precioEstimado)} />
+        <Fila nombre="Precio" valor={pedido.precio !== undefined ? pesos(pedido.precio) : precioTexto(pedido.precioEstimado)} />
       </dl>
 
       <section className="mt-8">
@@ -111,14 +123,6 @@ export default function Seguimiento({ id }: { id: string }) {
         </div>
       </section>
 
-      {WHATSAPP && (
-        <a
-          href={`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(`Hola, hice un pedido: ${link}`)}`}
-          className="mt-8 block w-full rounded-xl bg-acento py-4 text-center text-lg font-semibold text-white"
-        >
-          Escribinos por WhatsApp
-        </a>
-      )}
       <a href="./" className="mt-6 block text-center font-medium text-acento underline">
         Hacer otro pedido
       </a>

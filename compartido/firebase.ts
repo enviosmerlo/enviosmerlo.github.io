@@ -29,4 +29,6 @@ const config = DOMINIOS_REALES.includes(location.hostname) ? REAL : PRUEBAS;
 // scripts/verificar.py lee esta línea para saber a qué base se conectó antes de crear un pedido.
 console.info(`Firebase: conectado a ${config.projectId}`);
 
-export const db = getFirestore(initializeApp(config));
+// Auth la arma solo el panel (panel/src/auth.ts): el cliente no carga ni usa la sesión del operador.
+export const app = initializeApp(config);
+export const db = getFirestore(app);

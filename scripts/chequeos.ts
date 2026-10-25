@@ -10,7 +10,7 @@ const norte = { lat: plaza.lat + 1 / 111.195, lng: plaza.lng };
 assert.ok(Math.abs(kmEnLinea(plaza, norte) - 1) < 0.001);
 assert.equal(kmEnLinea(plaza, plaza), 0);
 
-const tarifa = { bajada: 1000, porKm: 500, minimo: 2000 };
+const tarifa = { bajada: 1000, porKm: 500, minimo: 2000, factor: 1.3 };
 assert.equal(precioEstimado(plaza, norte, tarifa), 2000); // 1000 + 1,3 km × 500 = 1650 → el mínimo
 const lejos = { lat: plaza.lat + 10 / 111.195, lng: plaza.lng };
 assert.equal(precioEstimado(plaza, lejos, tarifa), 7500); // 1000 + 13 km × 500
