@@ -1,14 +1,36 @@
 rules_version = '2';
 
 // Pedidos sin cuenta. El link de seguimiento es la llave: lleva el ID del pedido (20 caracteres al azar),
-// así que quien lo tiene lo lee, y nadie puede listar la colección para ver los de otros.
-// Cambiar, cancelar y ver todos queda para el panel del operador (Actualización 2).
+// así que quien lo tiene lo lee, y nadie sin ser operador puede listar la colección para ver los de otros.
+// El operador (panel, Actualización 2) lista, asigna, cambia estados y carga motoqueros y tarifa.
 // Las mismas reglas van a envios-merlo-pruebas y a envios-merlo: npm run reglas:pruebas / reglas:real.
 service cloud.firestore {
   match /databases/{database}/documents {
     match /pedidos/{id} {
       allow get: if true;
       allow create: if id.matches('[A-Za-z0-9]{20}') && pedidoNuevo(request.resource.data);
+      allow list: if esOperador() && request.query.limit <= 50;
+      allow update: if esOperador() && cambioDelOperador(resource.data, request.resource.data);
+    }
+
+    match /motoqueros/{id} {
+      allow read: if esOperador();
+      allow create, update: if esOperador() && motoquero(request.resource.data);
+    }
+
+    // Tarifa y WhatsApp del servicio: el cliente los lee para el precio estimado y el botón de WhatsApp.
+    match /config/servicio {
+      allow get: if true;
+      allow create, update: if esOperador() && servicio(request.resource.data);
+    }
+
+    // Por uid y no por "tener sesión": cualquiera puede crearse una cuenta con la clave pública.
+    // El de prueba solo existe en envios-merlo-pruebas (scripts/cuentas_prueba.py).
+    function esOperador() {
+      return request.auth != null && request.auth.uid in [
+        'uOCsQQh6yscnpPPh8hjbC4HB9Ju1', // operador de prueba
+        'PENDIENTE-UID-DE-MATIAS'       // se completa cuando Matías cree su usuario en el real
+      ];
     }
 
     function pedidoNuevo(p) {
@@ -35,6 +57,44 @@ service cloud.firestore {
         && (m.punto == null || m.punto is latlng)
         && (m.referencia == null || texto(m.referencia, 2, 200))
         && (m.punto != null || m.referencia != null);
+    }
+
+    // El operador solo toca estos campos; lo que cargó el cliente queda como está.
+    // ponytail: sin grafo de transiciones; el operador puede corregir un estado tocado por error.
+    function cambioDelOperador(antes, p) {
+      return p.diff(antes).affectedKeys().hasOnly(['estado', 'motoquero', 'precio', 'motivo', 'actualizado'])
+        && p.actualizado == request.time
+        && p.estado in ['recibido', 'asignado', 'en_camino', 'entregado', 'cancelado']
+        // Al pedido va solo el nombre del motoquero: el link es público y su celular no tiene que quedar a la vista.
+        && (!('motoquero' in p) || (p.motoquero is map && p.motoquero.keys().hasOnly(['id', 'nombre'])
+            && p.motoquero.keys().hasAll(['id', 'nombre']) && texto(p.motoquero.id, 1, 40) && texto(p.motoquero.nombre, 2, 60)))
+        && (!('precio' in p) || (p.precio is int && p.precio >= 0 && p.precio <= 10000000))
+        && (!('motivo' in p) || texto(p.motivo, 2, 200))
+        && (p.estado != 'cancelado' || 'motivo' in p)
+        && (!(p.estado in ['asignado', 'en_camino', 'entregado']) || ('motoquero' in p && 'precio' in p));
+    }
+
+    function motoquero(m) {
+      return m.keys().hasOnly(['nombre', 'telefono', 'activoEl', 'baja'])
+        && m.keys().hasAll(['nombre', 'telefono', 'activoEl', 'baja'])
+        && texto(m.nombre, 2, 60)
+        && m.telefono is string && m.telefono.matches('549[0-9]{10}')
+        // "Activo hoy" = la fecha de hoy en Argentina; al otro día deja de coincidir sola.
+        && (m.activoEl == null || (m.activoEl is string && m.activoEl.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')))
+        && m.baja is bool;
+    }
+
+    function servicio(c) {
+      return c.keys().hasOnly(['bajada', 'porKm', 'minimo', 'factor', 'whatsapp'])
+        && c.keys().hasAll(['bajada', 'porKm', 'minimo', 'factor', 'whatsapp'])
+        && pesos(c.bajada) && pesos(c.porKm) && pesos(c.minimo)
+        && c.factor is number && c.factor >= 1 && c.factor <= 3
+        && (c.whatsapp == null || (c.whatsapp is string && c.whatsapp.matches('549[0-9]{10}')));
+    }
+
+    // null = todavía sin cargar: el cliente ve "a confirmar".
+    function pesos(n) {
+      return n == null || (n is int && n >= 0 && n <= 10000000);
     }
 
     function texto(s, min, max) {
