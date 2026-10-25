@@ -226,6 +226,16 @@ def recorrer(ctx, nombre, funcion):
 
 if not PUBLICADA and not (DIST / "index.html").is_file():
     sys.exit("Falta dist/: corré antes npm run build")
+if PUBLICADA:
+    # Solo lectura: con las reglas subidas, un pedido que no existe da 404; si da 403, al real le faltan las reglas.
+    import urllib.error, urllib.request
+    try:
+        urllib.request.urlopen("https://firestore.googleapis.com/v1/projects/envios-merlo/databases/(default)/documents/pedidos/"
+                               + "".join(secrets.choice(string.ascii_letters) for _ in range(20)), timeout=30)
+        problemas.append("el real devolvió un pedido inventado")
+    except urllib.error.HTTPError as e:
+        if e.code != 404:
+            sys.exit(f"envios-merlo responde {e.code} a un pedido que no existe: faltan las reglas (npm run reglas:real).")
 OUT.mkdir(parents=True, exist_ok=True)
 print(f"Dirección: {BASE} · base esperada: {BASE_DE_DATOS} · {'solo lectura' if PUBLICADA else 'crea pedidos de prueba'}")
 with sync_playwright() as p:

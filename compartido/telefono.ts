@@ -18,5 +18,7 @@ export function normalizarTelefono(texto: string): string | null {
   // Solo el número local de Merlo (6 dígitos, con o sin 15 adelante).
   if (d.length === 8 && d.startsWith("15")) d = d.slice(2);
   if (d.length === 6) d = AREA_MERLO + d;
+  // Ninguna característica empieza con 1 salvo la 11: "15 5555 1234" sin el 11 no es un número real.
+  if (d.startsWith("1") && !d.startsWith("11")) return null;
   return d.length === 10 ? "549" + d : null;
 }

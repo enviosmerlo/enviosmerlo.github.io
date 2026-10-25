@@ -27,7 +27,14 @@ export default function Seguimiento({ id }: { id: string }) {
     if (!valido) return;
     return onSnapshot(
       doc(db, "pedidos", id),
-      (snap) => (snap.exists() ? setPedido(snap.data() as Pedido) : setNoEsta(true)),
+      // Sin señal llega primero un "no está" del caché vacío: solo cuenta el que confirma el servidor.
+      { includeMetadataChanges: true },
+      (snap) => {
+        if (snap.exists()) {
+          setPedido(snap.data() as Pedido);
+          setNoEsta(false);
+        } else if (!snap.metadata.fromCache) setNoEsta(true);
+      },
       // Un error deja al listener muerto: se muestra lo mismo que un pedido que no existe.
       () => setNoEsta(true),
     );
