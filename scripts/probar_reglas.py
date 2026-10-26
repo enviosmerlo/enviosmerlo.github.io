@@ -123,6 +123,7 @@ rechazos = {
     "precio negativo": pedido(precioEstimado={"integerValue": "-1"}),
     "precio como texto": pedido(precioEstimado=s("1000")),
     "precio absurdo": pedido(precioEstimado={"integerValue": "10000001"}),
+    "precio con decimales": pedido(precioEstimado={"doubleValue": 4500.5}),
     "origen sin punto ni referencia": pedido(origen=mapa(punto=nulo(), referencia=nulo())),
     "origen con clave de más": pedido(origen=mapa(punto=nulo(), referencia=s("casa"), extra=s("x"))),
     "origen sin la clave punto": pedido(origen=mapa(referencia=s("casa"))),

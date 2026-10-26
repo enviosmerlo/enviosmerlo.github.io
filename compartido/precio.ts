@@ -21,3 +21,11 @@ export function precioEstimado(a: Punto | null, b: Punto | null, tarifa: Tarifa 
   const km = kmEnLinea(a, b) * tarifa.factor;
   return Math.round(Math.max(tarifa.minimo, tarifa.bajada + km * tarifa.porKm));
 }
+
+export const pesos = (n: number) => `$ ${n.toLocaleString("es-AR")}`;
+
+// Lo que escribe el operador ("3.500", "3 500") en pesos enteros, hasta el tope de las reglas. null si no es eso.
+export function leerPesos(texto: string): number | null {
+  const limpio = texto.replace(/[.\s]/g, "");
+  return /^\d{1,8}$/.test(limpio) && Number(limpio) <= 10_000_000 ? Number(limpio) : null;
+}

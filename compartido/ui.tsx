@@ -1,9 +1,18 @@
 import type { CSSProperties, ReactNode } from "react";
-import type { Tipo } from "./pedido";
+import type { Estado, Tipo } from "./pedido";
+
+// Medidas comunes del cliente y el panel.
+export const FOCO = "outline-offset-2 focus-visible:outline-3 focus-visible:outline-terra-osc";
+// En los campos el foco es un borde terracota pegado, sin el aro separado de los botones.
+export const FOCO_CAMPO = "outline-offset-0 focus-visible:border-terra-osc focus-visible:outline-2 focus-visible:outline-terra-osc";
+// En la computadora, una columna de celular centrada sobre el fondo arena, con el borde de un teléfono.
+export const COLUMNA =
+  "mx-auto w-full max-w-[430px] md:my-6 md:overflow-hidden md:rounded-[32px] md:shadow-[0_0_0_1px_rgba(43,33,24,.14),0_10px_22px_-14px_rgba(43,33,24,.45)]";
+export const ALTO = "min-h-svh md:min-h-[calc(100svh-3rem)]";
 
 // Íconos propios del diseño Sierra, dibujados a mano (sin librerías). Los de interfaz son de 24 y de una línea;
 // los de los tipos de envío son de 48, con trazo más grueso y un relleno de color en `--tono`.
-const INTERFAZ: Record<string, ReactNode> = {
+const INTERFAZ = {
   pin: (<g className="ico"><path d="M12 21s-6.5-6.1-6.5-11.2a6.5 6.5 0 0 1 13 0C18.5 14.9 12 21 12 21z" /><circle cx="12" cy="9.8" r="2.4" /></g>),
   mira: (<><g className="ico"><circle cx="12" cy="12" r="6.5" /><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3" /></g><circle cx="12" cy="12" r="2.2" fill="currentColor" /></>),
   atras: (<g className="ico"><path d="M14.5 5.5 8 12l6.5 6.5" /></g>),
@@ -22,15 +31,42 @@ const INTERFAZ: Record<string, ReactNode> = {
   nota: (<g className="ico"><path d="M5.5 4.5h9l4 4v11h-13z" /><path d="M14.5 4.5v4h4M8.5 12.5h7M8.5 16h4.5" /></g>),
   mover: (<g className="ico"><path d="M12 3v18M3 12h18M12 3 9.5 5.5M12 3l2.5 2.5M12 21l-2.5-2.5M12 21l2.5-2.5M3 12l2.5-2.5M3 12l2.5 2.5M21 12l-2.5-2.5M21 12l-2.5 2.5" /></g>),
   cruz: (<g className="ico" style={{ strokeWidth: 2.2 }}><path d="M7 7l10 10M17 7 7 17" /></g>),
-  salir: (<g className="ico"><path d="M14.5 4.5h3.5a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5h-3.5M10 8l-4 4 4 4M6 12h9.5" /></g>),
 };
 export type NombreIcono = keyof typeof INTERFAZ;
+// Cada estado con su ícono, en el seguimiento y en el panel.
+export const ICONO_ESTADO: Record<Estado, NombreIcono> = { recibido: "reloj", asignado: "persona", en_camino: "moto", entregado: "tilde", cancelado: "cruz" };
 
 export function Icono({ nombre, className = "size-5" }: { nombre: NombreIcono; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={`shrink-0 ${className}`} aria-hidden="true">
       {INTERFAZ[nombre]}
     </svg>
+  );
+}
+
+// Etiqueta en negrita y campo con el ícono adentro; con `error`, el borde y el aviso en rojo.
+export function Campo({ etiqueta, icono, error, children }: { etiqueta: string; icono: NombreIcono; error?: string; children: ReactNode }) {
+  return (
+    <label className="block">
+      <span className="text-[16px] font-bold">{etiqueta}</span>
+      <span className={`relative mt-1.5 block ${error ? "[&>input]:border-rojo" : ""}`}>
+        <Icono nombre={icono} className="pointer-events-none absolute top-[15px] left-3.5 size-[22px] text-tierra" />
+        {children}
+      </span>
+      {error && <span className="mt-1.5 block text-[15px] leading-snug font-medium text-rojo">{error}</span>}
+    </label>
+  );
+}
+
+// Las letras de retiro (A, terracota) y entrega (B, verde), como en el mapa.
+export function Letra({ letra, className }: { letra: "A" | "B"; className: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`grid place-items-center rounded-full font-extrabold text-[#FFF8EE] ${letra === "A" ? "bg-terra" : "bg-monte"} ${className}`}
+    >
+      {letra}
+    </span>
   );
 }
 

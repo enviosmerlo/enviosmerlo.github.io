@@ -1,7 +1,7 @@
 // Chequeos de las cuentas que no se ven en pantalla: precio y teléfono. Corre antes de cada build (npm run build).
 import { strict as assert } from "node:assert";
 import { readFileSync } from "node:fs";
-import { kmEnLinea, precioEstimado } from "../compartido/precio.ts";
+import { kmEnLinea, leerPesos, precioEstimado } from "../compartido/precio.ts";
 import { normalizarTelefono } from "../compartido/telefono.ts";
 
 // Plaza de Merlo → 1 km al norte (1° de latitud ≈ 111,19 km con radio 6371).
@@ -16,6 +16,13 @@ const lejos = { lat: plaza.lat + 10 / 111.195, lng: plaza.lng };
 assert.equal(precioEstimado(plaza, lejos, tarifa), 7500); // 1000 + 13 km × 500
 assert.equal(precioEstimado(null, lejos, tarifa), null);
 assert.equal(precioEstimado(plaza, lejos, null), null);
+
+// El precio que escribe el operador: puntos de miles y espacios sí; centavos, letras o un monto absurdo, no.
+const montos: Record<string, number | null> = {
+  "3500": 3500, "3.500": 3500, " 3 500 ": 3500, "10.000.000": 10000000, "0": 0,
+  "3500,50": null, "3,5": null, "abc": null, "": null, "-5": null, "10.000.001": null, "123456789": null,
+};
+for (const [texto, esperado] of Object.entries(montos)) assert.equal(leerPesos(texto), esperado, `leerPesos(${JSON.stringify(texto)})`);
 
 // Lo que sale de normalizarTelefono tiene que pasar la misma regex que exigen las reglas de Firestore.
 const regla = /telefono\.matches\('([^']+)'\)/.exec(readFileSync(new URL("../firestore.rules", import.meta.url), "utf8"));

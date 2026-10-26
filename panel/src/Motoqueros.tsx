@@ -1,14 +1,16 @@
 import { addDoc, collection, doc, updateDoc } from "firebase/firestore";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useState, type FormEvent } from "react";
 import { db } from "../../compartido/firebase";
 import { normalizarTelefono } from "../../compartido/telefono";
-import { Icono, type NombreIcono } from "../../compartido/ui";
-import { CAMPO, ETIQUETA, FOCO, PRINCIPAL } from "./ui";
+import { Campo, FOCO } from "../../compartido/ui";
+import { CAMPO, PRINCIPAL } from "./ui";
 
 export type Motoquero = { id: string; nombre: string; telefono: string; activoEl: string | null; baja: boolean };
 
-// Fecha de hoy en Argentina (YYYY-MM-DD). "Activo hoy" guarda esta fecha y al otro día deja de coincidir sola.
-export const hoy = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/San_Luis" }).format(new Date());
+// La jornada en Argentina (YYYY-MM-DD). "Activo hoy" guarda esta fecha y al otro día deja de coincidir sola.
+// La jornada corta a las 6 de la mañana y no a medianoche: es la hora de San Luis menos 6 horas,
+// así un motoquero activado a la noche sigue activo de madrugada.
+export const hoy = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/San_Luis" }).format(Date.now() - 6 * 3600_000);
 export const celularLindo = (t: string) => `+${t.slice(0, 2)} ${t.slice(2, 3)} ${t.slice(3, 7)} ${t.slice(7)}`;
 
 export default function Motoqueros({ motoqueros }: { motoqueros: Motoquero[] }) {
@@ -114,16 +116,3 @@ export default function Motoqueros({ motoqueros }: { motoqueros: Motoquero[] }) 
 }
 
 const BOTON = `min-h-11 rounded-[11px] text-[15px] font-bold ${FOCO}`;
-
-// Etiqueta en negrita y campo papel con el ícono adentro, como los datos del cliente.
-export function Campo({ etiqueta, icono, children }: { etiqueta: string; icono: NombreIcono; children: ReactNode }) {
-  return (
-    <label className="block">
-      <span className={ETIQUETA}>{etiqueta}</span>
-      <span className="relative mt-1.5 block">
-        <Icono nombre={icono} className="pointer-events-none absolute top-[15px] left-3.5 size-[22px] text-tierra" />
-        {children}
-      </span>
-    </label>
-  );
-}

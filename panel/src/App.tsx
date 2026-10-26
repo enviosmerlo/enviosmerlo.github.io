@@ -2,13 +2,13 @@ import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { collection, onSnapshot } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { db } from "../../compartido/firebase";
-import { Icono } from "../../compartido/ui";
+import { FOCO, Icono } from "../../compartido/ui";
 import { auth } from "./auth";
 import Login from "./Login";
 import Motoqueros, { type Motoquero } from "./Motoqueros";
 import Pedidos from "./Pedidos";
 import Servicio from "./Servicio";
-import { COLUMNA, Encabezado, FOCO } from "./ui";
+import { Encabezado, MARCO } from "./ui";
 
 const VISTAS = { pedidos: "Pedidos", motoqueros: "Motoqueros", tarifa: "Tarifa" } as const;
 type Vista = keyof typeof VISTAS;
@@ -49,7 +49,7 @@ function Panel() {
   );
 
   return (
-    <main className={COLUMNA}>
+    <main className={MARCO}>
       <Encabezado salir={() => signOut(auth)} />
       <div className="px-4">
         <nav className="flex gap-1 rounded-[14px] bg-[#E8DDCB] p-1">
@@ -75,12 +75,15 @@ function Panel() {
         </nav>
         {error ? (
           <Cartel error={error} />
-        ) : vista === "pedidos" ? (
-          <Pedidos motoqueros={motoqueros} alContar={setEsperando} />
-        ) : vista === "motoqueros" ? (
-          <Motoqueros motoqueros={motoqueros} />
         ) : (
-          <Servicio />
+          <>
+            {/* Pedidos queda montado en las otras pestañas: el aviso, el número y el título siguen andando. */}
+            <div hidden={vista !== "pedidos"}>
+              <Pedidos motoqueros={motoqueros} alContar={setEsperando} />
+            </div>
+            {vista === "motoqueros" && <Motoqueros motoqueros={motoqueros} />}
+            {vista === "tarifa" && <Servicio />}
+          </>
         )}
       </div>
     </main>

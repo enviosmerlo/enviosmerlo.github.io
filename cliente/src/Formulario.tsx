@@ -3,10 +3,10 @@ import { useEffect, useRef, useState, type Dispatch, type ReactNode, type SetSta
 import { db } from "../../compartido/firebase";
 import { Marca } from "../../compartido/marca";
 import { ESTADOS, ID_VALIDO, TIPOS, type Lugar, type Pedido, type Punto, type Tipo } from "../../compartido/pedido";
-import { precioEstimado } from "../../compartido/precio";
+import { pesos, precioEstimado } from "../../compartido/precio";
 import { tarifaDe, useServicio } from "../../compartido/servicio";
 import { normalizarTelefono } from "../../compartido/telefono";
-import { Icono, IconoTipo, Sierras, TIPO_ESTILO, type NombreIcono } from "../../compartido/ui";
+import { ALTO, Campo, COLUMNA, FOCO, FOCO_CAMPO, Icono, IconoTipo, Letra, Sierras, TIPO_ESTILO } from "../../compartido/ui";
 import Mapa from "./Mapa";
 
 const PASOS = 5;
@@ -18,18 +18,10 @@ const paraGuardar = (l: Lugar) => ({
   punto: l.punto ? new GeoPoint(l.punto.lat, l.punto.lng) : null,
   referencia: referencia(l),
 });
-export const pesos = (n: number) => `$ ${n.toLocaleString("es-AR")}`;
 export const precioTexto = (n: number | null) => (n !== null ? `${pesos(n)} (estimado)` : "A confirmar por WhatsApp");
-
-// En la computadora, todo en una columna de celular centrada sobre el fondo arena, con el borde de un teléfono.
-export const COLUMNA =
-  "mx-auto w-full max-w-[430px] md:my-6 md:overflow-hidden md:rounded-[32px] md:shadow-[0_0_0_1px_rgba(43,33,24,.14),0_10px_22px_-14px_rgba(43,33,24,.45)]";
-export const ALTO = "min-h-svh md:min-h-[calc(100svh-3rem)]";
-export const FOCO = "outline-offset-2 focus-visible:outline-3 focus-visible:outline-terra-osc";
 const ATRAS = `flex h-[54px] items-center gap-1 rounded-[14px] border-[1.5px] border-linea-osc pr-5 pl-3 text-[17px] font-bold disabled:opacity-50 ${FOCO}`;
 const PRINCIPAL = `flex h-[54px] flex-1 items-center justify-center gap-2 rounded-[14px] bg-terra text-[18px] font-bold text-[#FFF8EE] disabled:opacity-40 ${FOCO}`;
-// En los campos el foco es un borde terracota pegado, sin el aro separado de los botones.
-const CAMPO = `w-full rounded-[14px] border-[1.5px] border-linea-osc bg-papel pr-3.5 pl-11 text-[17px] placeholder:text-[#76634F] outline-offset-0 focus-visible:border-terra-osc focus-visible:outline-2 focus-visible:outline-terra-osc`;
+const CAMPO = `w-full rounded-[14px] border-[1.5px] border-linea-osc bg-papel pr-3.5 pl-11 text-[17px] placeholder:text-[#76634F] ${FOCO_CAMPO}`;
 const ROTULO = "text-[13px] leading-tight font-bold tracking-[0.1em] text-tierra uppercase";
 const SUBTITULO: Record<Tipo, string> = {
   paquete: "Cajas, bolsos, encargos",
@@ -333,17 +325,6 @@ function describir(l: Lugar) {
   return ref ?? "Marcado en el mapa";
 }
 
-export function Letra({ letra, className }: { letra: "A" | "B"; className: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={`grid place-items-center rounded-full font-extrabold text-[#FFF8EE] ${letra === "A" ? "bg-terra" : "bg-monte"} ${className}`}
-    >
-      {letra}
-    </span>
-  );
-}
-
 function Barra({ paso, apagado = "bg-linea", className = "" }: { paso: number; apagado?: string; className?: string }) {
   return (
     <div className={`grid grid-cols-5 gap-1 ${className}`} aria-hidden="true">
@@ -378,19 +359,6 @@ function Pantalla({ paso, titulo, children, abajo }: { paso: number; titulo: str
       <div className="mt-5 flex-1 space-y-5 px-5">{children}</div>
       <div className="mt-6 flex gap-3 px-5 pb-6">{abajo}</div>
     </main>
-  );
-}
-
-function Campo({ etiqueta, icono, error, children }: { etiqueta: string; icono: NombreIcono; error?: string; children: ReactNode }) {
-  return (
-    <label className="block">
-      <span className="text-[16px] font-bold">{etiqueta}</span>
-      <span className={`relative mt-1.5 block ${error ? "[&>input]:border-rojo" : ""}`}>
-        <Icono nombre={icono} className="pointer-events-none absolute top-[15px] left-3.5 size-[22px] text-tierra" />
-        {children}
-      </span>
-      {error && <span className="mt-1.5 block text-[15px] leading-snug font-medium text-rojo">{error}</span>}
-    </label>
   );
 }
 

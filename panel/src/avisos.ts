@@ -26,22 +26,31 @@ export function activarAvisos(alCambiar: () => void) {
   if (!audio) {
     audio = new AudioContext();
     audio.addEventListener("statechange", alCambiar);
+    // Al salir de la pestaña el navegador suelta la pantalla prendida: al volver se pide de nuevo, sin otro toque.
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && pantalla?.released) pedirPantalla(alCambiar);
+    });
   }
   audio.resume().then(alCambiar, alCambiar);
   bip();
+  pedirPantalla(alCambiar);
+}
+
+function pedirPantalla(alCambiar: () => void) {
   navigator.wakeLock
     ?.request("screen")
     .then((w) => {
       pantalla = w;
       w.addEventListener("release", alCambiar);
     })
-    .catch(() => {}) // batería baja o navegador sin soporte: la pantalla se puede apagar, el resto anda
+    .catch(() => (pantalla = null)) // batería baja o sin permiso: la pantalla se puede apagar, el resto anda
     .finally(alCambiar);
 }
 
+// pantalla: true prendida, false se soltó (hay que volver a tocar), null si el navegador no la da (sin wakeLock o la negó).
 export const estadoAvisos = () => ({
   sonido: audio?.state === "running",
-  pantalla: !!pantalla && !pantalla.released,
+  pantalla: navigator.wakeLock && pantalla ? !pantalla.released : null,
 });
 
 let sonidos = 0;

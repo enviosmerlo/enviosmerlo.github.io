@@ -1,8 +1,8 @@
 import { sendPasswordResetEmail, signInWithEmailAndPassword } from "firebase/auth";
 import { useState, type FormEvent } from "react";
-import { Icono } from "../../compartido/ui";
+import { FOCO, Icono } from "../../compartido/ui";
 import { auth } from "./auth";
-import { CAMPO, COLUMNA, Encabezado, ETIQUETA, FOCO, PRINCIPAL } from "./ui";
+import { CAMPO, Encabezado, ETIQUETA, MARCO, PRINCIPAL } from "./ui";
 
 // Los usuarios no se crean acá: el de Matías se crea en la consola de Firebase y el alta queda cerrada.
 const ERRORES: Record<string, string> = {
@@ -45,7 +45,7 @@ export default function Login() {
   }
 
   return (
-    <main className={COLUMNA}>
+    <main className={MARCO}>
       <Encabezado>
         <h2 className="mt-8 px-5 font-display text-[40px] leading-none font-extrabold tracking-[-0.015em]">Entrá al panel</h2>
       </Encabezado>

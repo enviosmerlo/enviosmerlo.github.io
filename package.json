@@ -8,8 +8,8 @@
     "build": "node scripts/chequeos.ts && tsc -b && vite build",
     "preview": "vite preview",
     "firebase": "npx -y firebase-tools@15.33.0",
-    "reglas:pruebas": "npm run firebase -- deploy --only firestore:rules --project envios-merlo-pruebas",
-    "reglas:real": "npm run firebase -- deploy --only firestore:rules --project envios-merlo"
+    "reglas:pruebas": "npm run firebase -- deploy --only firestore:rules,firestore:indexes --project envios-merlo-pruebas",
+    "reglas:real": "npm run firebase -- deploy --only firestore:rules,firestore:indexes --project envios-merlo"
   },
   "dependencies": {
     "firebase": "^13.1.0",

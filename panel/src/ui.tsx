@@ -1,15 +1,10 @@
 import type { ReactNode } from "react";
 import { Marca } from "../../compartido/marca";
-import { Sierras } from "../../compartido/ui";
+import { ALTO, COLUMNA, FOCO, FOCO_CAMPO, Sierras } from "../../compartido/ui";
 
-// Las mismas medidas que el cliente (cliente/src/Formulario.tsx), sin importarlo: traería el mapa al panel.
-export const FOCO = "outline-offset-2 focus-visible:outline-3 focus-visible:outline-terra-osc";
-// En la computadora, una columna de celular centrada sobre el fondo arena, con el borde de un teléfono.
-export const COLUMNA =
-  "mx-auto min-h-svh w-full max-w-[430px] pb-8 md:my-6 md:min-h-[calc(100svh-3rem)] md:overflow-hidden md:rounded-[32px] md:shadow-[0_0_0_1px_rgba(43,33,24,.14),0_10px_22px_-14px_rgba(43,33,24,.45)]";
+// La columna de celular del cliente (compartido/ui.tsx), con aire abajo.
+export const MARCO = `${COLUMNA} ${ALTO} pb-8`;
 export const PRINCIPAL = `flex h-[54px] w-full items-center justify-center gap-2 rounded-[14px] bg-terra text-[18px] font-bold text-[#FFF8EE] disabled:opacity-40 ${FOCO}`;
-// En los campos el foco es un borde terracota pegado, sin el aro separado de los botones.
-export const FOCO_CAMPO = "outline-offset-0 focus-visible:border-terra-osc focus-visible:outline-2 focus-visible:outline-terra-osc";
 export const CAMPO = `h-[52px] w-full rounded-[14px] border-[1.5px] border-linea-osc bg-papel px-4 text-[17px] placeholder:text-[#76634F] ${FOCO_CAMPO}`;
 export const ETIQUETA = "text-[16px] font-bold";
 

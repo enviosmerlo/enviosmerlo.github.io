@@ -1,71 +1,106 @@
-import { collection, doc, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc, type GeoPoint } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where,
+  type GeoPoint,
+  type QuerySnapshot,
+} from "firebase/firestore";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { db } from "../../compartido/firebase";
 import { NOMBRE } from "../../compartido/marca";
 import { ESTADOS, linkDelPedido, TIPOS, type Estado, type Pedido } from "../../compartido/pedido";
-import { Icono, IconoTipo, type NombreIcono } from "../../compartido/ui";
+import { leerPesos, pesos, precioEstimado, type Tarifa } from "../../compartido/precio";
+import { tarifaDe, useServicio } from "../../compartido/servicio";
+import { FOCO, FOCO_CAMPO, Icono, ICONO_ESTADO, IconoTipo, Letra, type NombreIcono } from "../../compartido/ui";
 import { Cartel } from "./App";
 import { activarAvisos, estadoAvisos, sonar } from "./avisos";
 import { celularLindo, hoy, type Motoquero } from "./Motoqueros";
-import { FOCO, FOCO_CAMPO, PRINCIPAL } from "./ui";
+import { PRINCIPAL } from "./ui";
 
 type ConId = Pedido & { id: string };
 // Primero lo que espera una acción tuya; dentro de cada grupo, lo más nuevo arriba.
 const ORDEN: Record<Estado, number> = { recibido: 0, asignado: 1, en_camino: 1, entregado: 2, cancelado: 2 };
-const pesos = (n: number) => `$ ${n.toLocaleString("es-AR")}`;
+// Usan el índice estado + creado de firestore.indexes.json.
+const pedidosEn = (estados: Estado[], tope: number) =>
+  query(collection(db, "pedidos"), where("estado", "in", estados), orderBy("creado", "desc"), limit(tope));
+const conId = (snap: QuerySnapshot) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as Pedido) }));
 const raiz = () => new URL("../", location.href).href; // la pantalla del cliente está un nivel arriba del panel
 const mapa = (p: GeoPoint) => `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${p.latitude},${p.longitude}`)}`;
+const coords = (p: GeoPoint | null) => p && { lat: p.latitude, lng: p.longitude };
 // Cada estado con color + ícono + texto: nunca solo el color.
-const ESTILO: Record<Estado, { chip: string; icono: NombreIcono }> = {
-  recibido: { chip: "bg-ocre-cl text-ocre-osc", icono: "reloj" },
-  asignado: { chip: "bg-piedra-cl text-piedra", icono: "persona" },
-  en_camino: { chip: "bg-terra-cl text-terra-osc", icono: "moto" },
-  entregado: { chip: "bg-monte-cl text-monte-osc", icono: "tilde" },
-  cancelado: { chip: "bg-rojo-cl text-rojo", icono: "cruz" },
+const CHIP: Record<Estado, string> = {
+  recibido: "bg-ocre-cl text-ocre-osc",
+  asignado: "bg-piedra-cl text-piedra",
+  en_camino: "bg-terra-cl text-terra-osc",
+  entregado: "bg-monte-cl text-monte-osc",
+  cancelado: "bg-rojo-cl text-rojo",
 };
 const LINK = `flex min-h-6 w-max max-w-full items-center gap-1 font-bold text-terra-osc underline underline-offset-2 ${FOCO}`;
 // Sin relleno a los costados (como en la maqueta): así "Cambiar motoquero o precio" entra en una línea.
 const SUAVE = "flex-1 border-[1.5px] border-linea-osc bg-papel px-2";
 const CAJA_CAMPO = `h-11 w-full rounded-[11px] border-[1.5px] border-linea-osc bg-papel text-[16px] placeholder:text-[#76634F] ${FOCO_CAMPO}`;
-const lugar = (l: Pedido["origen"]) => [l.referencia ?? "Punto en el mapa", l.punto && mapa(l.punto)].filter(Boolean).join("\n");
+// Lo que escribió el cliente va en una sola línea: un salto suyo no tiene que parecer otro dato del mensaje.
+const plano = (t: string) => t.replace(/\s+/g, " ").trim();
+const lugar = (l: Pedido["origen"]) => [plano(l.referencia ?? "") || "Punto en el mapa", l.punto && mapa(l.punto)].filter(Boolean).join("\n");
 
-// Lo que le llega al motoquero por WhatsApp: todo lo que necesita para salir sin preguntar.
+// Lo que le llega al motoquero por WhatsApp: todo lo que necesita para salir sin preguntar. La nota del cliente, al final.
 function mensajeParaMotoquero(p: ConId) {
   return [
     `Envío de ${NOMBRE}: ${TIPOS[p.tipo]}`,
     `Retiro: ${lugar(p.origen)}`,
     `Entrega: ${lugar(p.destino)}`,
-    `Cliente: ${p.nombre} · https://wa.me/${p.telefono}`,
-    p.nota && `Nota: ${p.nota}`,
+    `Cliente: ${plano(p.nombre)} · https://wa.me/${p.telefono}`,
     p.precio !== undefined && `Precio: ${pesos(p.precio)}`,
     `Seguimiento: ${linkDelPedido(p.id, raiz())}`,
+    plano(p.nota) && `Nota del cliente: ${plano(p.nota)}`,
   ]
     .filter(Boolean)
     .join("\n\n");
 }
 
 export default function Pedidos({ motoqueros, alContar }: { motoqueros: Motoquero[]; alContar: (n: number) => void }) {
-  const [pedidos, setPedidos] = useState<ConId[] | null>(null);
+  const [abiertos, setAbiertos] = useState<ConId[] | null>(null);
+  const [cerrados, setCerrados] = useState<ConId[]>([]);
   const [nuevos, setNuevos] = useState<Set<string>>(new Set());
   const [error, setError] = useState<{ code?: string } | null>(null);
   const [avisos, setAvisos] = useState(estadoAvisos);
+  // ponytail: la tarifa se lee al abrir el panel; un cambio en Tarifa llega al estimado al recargar.
+  const tarifa = tarifaDe(useServicio());
 
   useEffect(() => {
     let primeraCarga = true;
-    return onSnapshot(
-      query(collection(db, "pedidos"), orderBy("creado", "desc"), limit(50)),
+    // Los abiertos, lo que hay que atender: un pedido viejo sin cerrar no se pierde detrás de 50 cerrados.
+    const sinAbiertos = onSnapshot(
+      pedidosEn(["recibido", "asignado", "en_camino"], 50),
       (snap) => {
-        // Lo que entra después de la carga inicial es un pedido nuevo: suena.
-        const llegados = primeraCarga ? [] : snap.docChanges().filter((c) => c.type === "added").map((c) => c.doc.id);
+        // Suena un pedido que entra después de la carga inicial, recibido y que no viene de un cambio propio.
+        const llegados = primeraCarga
+          ? []
+          : snap
+              .docChanges()
+              .filter((c) => c.type === "added" && c.doc.data().estado === "recibido" && !c.doc.metadata.hasPendingWrites)
+              .map((c) => c.doc.id);
         primeraCarga = false;
         if (llegados.length) {
           setNuevos((n) => new Set([...n, ...llegados]));
           sonar();
         }
-        setPedidos(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Pedido) })));
+        setAbiertos(conId(snap));
       },
       setError,
     );
+    // De los cerrados, solo los últimos: para ver qué pasó.
+    const sinCerrados = onSnapshot(pedidosEn(["entregado", "cancelado"], 20), (snap) => setCerrados(conId(snap)), setError);
+    return () => {
+      sinAbiertos();
+      sinCerrados();
+    };
   }, []);
 
   // El sonido y la pantalla prendida se pierden al bloquear o salir de la pestaña: al volver se revisa.
@@ -75,19 +110,22 @@ export default function Pedidos({ motoqueros, alContar }: { motoqueros: Motoquer
     return () => document.removeEventListener("visibilitychange", revisar);
   }, []);
 
-  const esperando = pedidos?.filter((p) => p.estado === "recibido").length ?? 0;
+  const esperando = abiertos?.filter((p) => p.estado === "recibido").length ?? 0;
   useEffect(() => {
     document.title = `${esperando ? `(${esperando}) ` : ""}Panel · ${NOMBRE}`;
     alContar(esperando);
   }, [esperando, alContar]);
 
   if (error) return <Cartel error={error} />;
-  if (!pedidos) return <p className="mt-4 text-[16px] text-tierra">Cargando pedidos…</p>;
-  const ordenados = [...pedidos].sort((a, b) => ORDEN[a.estado] - ORDEN[b.estado]);
+  if (!abiertos) return <p className="mt-4 text-[16px] text-tierra">Cargando pedidos…</p>;
+  // Un pedido que se cierra pasa de una lista a la otra: por un instante puede estar en las dos.
+  const unicos = new Map([...abiertos, ...cerrados].map((p) => [p.id, p]));
+  const ordenados = [...unicos.values()].sort((a, b) => ORDEN[a.estado] - ORDEN[b.estado]);
 
   return (
     <section data-cargado>
-      {!avisos.sonido ? (
+      {/* Sin sonido, o si se soltó la pantalla prendida, hace falta otro toque. */}
+      {!avisos.sonido || avisos.pantalla === false ? (
         <div className="mt-3 rounded-[18px] border-2 border-ocre bg-ocre-cl p-3">
           <button type="button" onClick={() => activarAvisos(() => setAvisos(estadoAvisos()))} className={PRINCIPAL}>
             <Icono nombre="campana" className="size-[22px]" />
@@ -104,7 +142,7 @@ export default function Pedidos({ motoqueros, alContar }: { motoqueros: Motoquer
       {ordenados.length ? (
         <ul className="mt-2 space-y-2">
           {ordenados.map((p) => (
-            <Tarjeta key={p.id} pedido={p} nuevo={nuevos.has(p.id) && p.estado === "recibido"} motoqueros={motoqueros} />
+            <Tarjeta key={p.id} pedido={p} nuevo={nuevos.has(p.id) && p.estado === "recibido"} motoqueros={motoqueros} tarifa={tarifa} />
           ))}
         </ul>
       ) : (
@@ -114,7 +152,7 @@ export default function Pedidos({ motoqueros, alContar }: { motoqueros: Motoquer
   );
 }
 
-function Tarjeta({ pedido: p, nuevo, motoqueros }: { pedido: ConId; nuevo: boolean; motoqueros: Motoquero[] }) {
+function Tarjeta({ pedido: p, nuevo, motoqueros, tarifa }: { pedido: ConId; nuevo: boolean; motoqueros: Motoquero[]; tarifa: Tarifa | null }) {
   const [asignando, setAsignando] = useState(false);
   const [cancelando, setCancelando] = useState(false);
   const [aviso, setAviso] = useState("");
@@ -130,6 +168,9 @@ function Tarjeta({ pedido: p, nuevo, motoqueros }: { pedido: ConId; nuevo: boole
       () => setAviso(""),
       () => setAviso("No se pudo guardar. Revisá la conexión y probá de nuevo."),
     );
+  // Cambiar motoquero o precio deja el estado como está: solo un pedido recibido pasa a asignado.
+  const asignar = (campos: object) =>
+    guardar({ estado: p.estado === "recibido" ? "asignado" : p.estado, ...campos }).then(() => setAsignando(false));
 
   // Lo que espera una acción tuya (o lo que estás cambiando) va completo; lo demás, compacto.
   const completo = abierto && (p.estado === "recibido" || asignando);
@@ -143,7 +184,7 @@ function Tarjeta({ pedido: p, nuevo, motoqueros }: { pedido: ConId; nuevo: boole
   const datos = (
     <dl className="grid grid-cols-[90px_1fr] gap-x-2 gap-y-1.5 text-[15px] leading-snug">
       <dt className="flex gap-2 text-tierra">
-        <Letra letra="A" />
+        <Letra letra="A" className="mt-px size-5 shrink-0 text-[11px]" />
         Retiro
       </dt>
       <dd className="min-w-0 font-bold break-words">
@@ -151,7 +192,7 @@ function Tarjeta({ pedido: p, nuevo, motoqueros }: { pedido: ConId; nuevo: boole
         {ver(p.origen.punto)}
       </dd>
       <dt className="flex gap-2 text-tierra">
-        <Letra letra="B" />
+        <Letra letra="B" className="mt-px size-5 shrink-0 text-[11px]" />
         Entrega
       </dt>
       <dd className="min-w-0 font-bold break-words">
@@ -219,11 +260,7 @@ function Tarjeta({ pedido: p, nuevo, motoqueros }: { pedido: ConId; nuevo: boole
           <Cabeza pedido={p} hora={hora} grande chip={!nuevo} />
           <div className="mt-2.5">{datos}</div>
           {error}
-          <Asignar
-            pedido={p}
-            motoqueros={motoqueros}
-            alGuardar={(campos) => guardar({ estado: "asignado", ...campos }).then(() => setAsignando(false))}
-          />
+          <Asignar pedido={p} tarifa={tarifa} motoqueros={motoqueros} alGuardar={asignar} alVolver={asignando ? () => setAsignando(false) : undefined} />
           {cancelar}
         </div>
       </li>
@@ -301,7 +338,6 @@ function Tarjeta({ pedido: p, nuevo, motoqueros }: { pedido: ConId; nuevo: boole
 
 // Tipo con su ícono y la hora; el chip del estado a la derecha (el pedido nuevo lo lleva en la banda).
 function Cabeza({ pedido: p, hora, grande, chip }: { pedido: ConId; hora?: string; grande?: boolean; chip?: boolean }) {
-  const e = ESTILO[p.estado];
   return (
     <div className="flex items-center justify-between gap-2">
       <p className="flex min-w-0 flex-wrap items-center gap-x-2">
@@ -310,8 +346,8 @@ function Cabeza({ pedido: p, hora, grande, chip }: { pedido: ConId; hora?: strin
         <span className={`num text-tierra ${grande ? "text-[16px]" : "text-[15px]"}`}>· {hora}</span>
       </p>
       {chip && (
-        <span className={`flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-[13.5px] font-bold ${e.chip}`}>
-          <Icono nombre={e.icono} className="size-4" />
+        <span className={`flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-[13.5px] font-bold ${CHIP[p.estado]}`}>
+          <Icono nombre={ICONO_ESTADO[p.estado]} className="size-4" />
           {ESTADOS[p.estado]}
         </span>
       )}
@@ -319,38 +355,39 @@ function Cabeza({ pedido: p, hora, grande, chip }: { pedido: ConId; hora?: strin
   );
 }
 
-function Letra({ letra }: { letra: "A" | "B" }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={`mt-px grid size-5 shrink-0 place-items-center rounded-full text-[11px] font-extrabold text-[#FFF8EE] ${letra === "A" ? "bg-terra" : "bg-monte"}`}
-    >
-      {letra}
-    </span>
-  );
-}
+type AsignarProps = {
+  pedido: ConId;
+  tarifa: Tarifa | null;
+  motoqueros: Motoquero[];
+  alGuardar: (c: object) => Promise<unknown>;
+  alVolver?: () => void;
+};
 
-function Asignar({ pedido, motoqueros, alGuardar }: { pedido: ConId; motoqueros: Motoquero[]; alGuardar: (c: object) => Promise<unknown> }) {
+function Asignar({ pedido, tarifa, motoqueros, alGuardar, alVolver }: AsignarProps) {
   const activos = motoqueros.filter((m) => !m.baja && m.activoEl === hoy());
+  // Con los puntos guardados y la tarifa de hoy; si falta alguno de los dos, el que vio el cliente.
+  const estimado = precioEstimado(coords(pedido.origen.punto), coords(pedido.destino.punto), tarifa) ?? pedido.precioEstimado;
   const [motoId, setMotoId] = useState(pedido.motoquero?.id ?? "");
-  const [precio, setPrecio] = useState(String(pedido.precio ?? pedido.precioEstimado ?? ""));
+  // null = sin tocar: sigue al precio ya asignado o al estimado, que puede llegar después (la tarifa se lee aparte).
+  const [precio, setPrecio] = useState<string | null>(null);
+  const valor = precio ?? String(pedido.precio ?? estimado ?? "");
   const [aviso, setAviso] = useState("");
 
   function guardar(e: FormEvent) {
     e.preventDefault();
     const moto = activos.find((m) => m.id === motoId);
-    const pesos = Number(precio.replace(/\D/g, ""));
+    const monto = leerPesos(valor);
     if (!moto) return setAviso("Elegí quién lo lleva.");
-    if (!precio.trim() || !Number.isInteger(pesos)) return setAviso("Poné el precio en pesos.");
-    alGuardar({ motoquero: { id: moto.id, nombre: moto.nombre }, precio: pesos });
+    if (monto === null) return setAviso("Poné el precio en pesos, sin centavos.");
+    alGuardar({ motoquero: { id: moto.id, nombre: moto.nombre }, precio: monto });
   }
 
   return (
     <div className="mt-2.5 rounded-[14px] bg-arena p-2.5">
       <p className="flex items-baseline justify-between gap-3 px-1">
         <span className="text-[14px] font-bold text-tierra">Precio estimado</span>
-        {pedido.precioEstimado !== null ? (
-          <span className="num font-display text-[22px] leading-tight font-extrabold">{pesos(pedido.precioEstimado)}</span>
+        {estimado !== null ? (
+          <span className="num font-display text-[22px] leading-tight font-extrabold">{pesos(estimado)}</span>
         ) : (
           <span className="text-[16px] font-bold">A confirmar</span>
         )}
@@ -379,7 +416,7 @@ function Asignar({ pedido, motoqueros, alGuardar }: { pedido: ConId; motoqueros:
                 $
               </span>
               <input
-                value={precio}
+                value={valor}
                 onChange={(e) => setPrecio(e.target.value)}
                 inputMode="numeric"
                 aria-label="Precio en pesos"
@@ -398,38 +435,52 @@ function Asignar({ pedido, motoqueros, alGuardar }: { pedido: ConId; motoqueros:
           )}
         </form>
       )}
+      {alVolver && (
+        <Boton onClick={alVolver} clase="mt-2 w-full border-[1.5px] border-linea-osc bg-papel">
+          Volver
+        </Boton>
+      )}
     </div>
   );
 }
 
 function Cancelar({ alCancelar, alVolver }: { alCancelar: (motivo: string) => void; alVolver: () => void }) {
   const [motivo, setMotivo] = useState("");
+  function confirmar(e: FormEvent) {
+    e.preventDefault();
+    if (motivo.trim().length >= 2) alCancelar(motivo.trim()); // "  x" pasa el minLength pero no las reglas
+  }
+  // Un form con el motivo obligatorio: si falta, avisa el navegador.
   return (
-    <div className="mt-2 mb-2 rounded-[14px] bg-rojo-cl p-2.5">
+    <form onSubmit={confirmar} className="mt-2 mb-2 rounded-[14px] bg-rojo-cl p-2.5">
       <input
         value={motivo}
         onChange={(e) => setMotivo(e.target.value)}
+        required
+        minLength={2}
         maxLength={200}
         aria-label="Motivo de la cancelación"
         placeholder="Motivo (lo ve el cliente)"
         className={`px-3 ${CAJA_CAMPO}`}
       />
       <div className="mt-2 flex gap-2">
-        <Boton onClick={() => motivo.trim().length >= 2 && alCancelar(motivo.trim())} clase="flex-1 bg-rojo px-3 text-[#FFF8EE]" icono="cruz">
+        <Boton enviar clase="flex-1 bg-rojo px-3 text-[#FFF8EE]" icono="cruz">
           Confirmar cancelación
         </Boton>
         <Boton onClick={alVolver} clase="border-[1.5px] border-linea-osc bg-papel px-5">
           Volver
         </Boton>
       </div>
-    </div>
+    </form>
   );
 }
 
-function Boton({ onClick, clase, icono, children }: { onClick: () => void; clase: string; icono?: NombreIcono; children: ReactNode }) {
+type BotonProps = { onClick?: () => void; enviar?: boolean; clase: string; icono?: NombreIcono; children: ReactNode };
+
+function Boton({ onClick, enviar, clase, icono, children }: BotonProps) {
   return (
     <button
-      type="button"
+      type={enviar ? "submit" : "button"}
       onClick={onClick}
       className={`flex min-h-11 items-center justify-center gap-1.5 rounded-[11px] text-[15px] leading-tight font-bold ${FOCO} ${clase}`}
     >

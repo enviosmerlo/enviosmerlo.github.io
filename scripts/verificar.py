@@ -19,12 +19,12 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from playwright.sync_api import expect, sync_playwright
+from playwright.sync_api import TimeoutError as TiempoAgotado, expect, sync_playwright
 
 DIST = Path(__file__).resolve().parent.parent / "dist"
 OUT = Path(sys.argv[1] if len(sys.argv) > 1 else "capturas")
@@ -261,9 +261,9 @@ def alta_motoquero(pg, nombre, tocar, cap):
     tocar(pg.get_by_role("button", name="Agregar"))
     item = pg.locator(f'[data-motoquero="{moto}"]')
     expect(item.get_by_label("Activo hoy")).to_be_checked()
-    # "Activo hoy" es la fecha de Argentina, no la de UTC (después de las 21 h ya sería mañana).
+    # "Activo hoy" es la jornada de Argentina, no la fecha de UTC: corta a las 6 de la mañana (como hoy() en Motoqueros.tsx).
     # La casilla se tilda con la escritura local: se espera a que el servidor la tenga antes de leerla.
-    hoy_ar = datetime.now(ZoneInfo("America/Argentina/San_Luis")).date().isoformat()
+    hoy_ar = (datetime.now(ZoneInfo("America/Argentina/San_Luis")) - timedelta(hours=6)).date().isoformat()
     for _ in range(10):
         guardado = [d for d in rest("GET", "motoqueros?pageSize=300").get("documents", [])
                     if d["fields"]["nombre"]["stringValue"] == moto]
@@ -274,8 +274,7 @@ def alta_motoquero(pg, nombre, tocar, cap):
         problemas.append(f"{nombre}: el motoquero no quedó activo con la fecha de hoy en Argentina ({hoy_ar})")
     cap("motoqueros")
     comunes(pg, f"{nombre} motoqueros")
-    tocar(pg.get_by_role("button", name="Pedidos", exact=True))
-    return moto, f"5492656{local}"
+    return moto, f"5492656{local}"  # el panel queda en Motoqueros: ahí le llega el pedido del cliente
 
 
 def asignar_y_entregar(pp, pc, id_, moto, celular_moto, nombre, tocar, cap_p, cap_c):
@@ -319,9 +318,14 @@ def cancelar(pp, pc, id_, nombre, tocar, cap_c):
 def tarifa(pp, nombre, tocar, cap):
     tocar(pp.get_by_role("button", name="Tarifa", exact=True))
     expect(pp.get_by_label("Mínimo ($)")).to_have_value(str(SERVICIO["minimo"]))
-    pp.get_by_label("Mínimo ($)").fill(str(SERVICIO["minimo"]))
+    pp.get_by_label("Mínimo ($)").fill(f"{SERVICIO['minimo']:,}".replace(",", "."))  # con punto de miles, como se escribe
     tocar(pp.get_by_role("button", name="Guardar"))
     expect(pp.get_by_text("Guardado.")).to_be_visible()
+    # Lo guardado de verdad (no lo que muestra la pantalla) tiene que ser la tarifa de prueba, con el mínimo sin el punto.
+    campos = rest("GET", "config/servicio")["fields"]
+    guardado = {k: int(v["integerValue"]) if "integerValue" in v else v.get("doubleValue", v.get("stringValue")) for k, v in campos.items()}
+    if guardado != SERVICIO:
+        problemas.append(f"{nombre}: la tarifa guardada no es la esperada: {guardado}")
     cap("3-tarifa")
     comunes(pp, f"{nombre} tarifa")
 
@@ -351,6 +355,7 @@ def contexto(nav, opciones):
 
 
 paginas = []
+SIN_RED = ("ERR_INTERNET_DISCONNECTED", "Could not reach Cloud Firestore backend")
 
 
 def abrir(ctx, nombre):
@@ -358,8 +363,8 @@ def abrir(ctx, nombre):
     pg = ctx.new_page()
     errores: list[str] = []
     consola: list[str] = []
-    # ERR_INTERNET_DISCONNECTED lo provoca el corte de red simulado de la prueba sin señal, no la app.
-    pg.on("console", lambda m: (consola.append(m.text), m.type == "error" and "ERR_INTERNET_DISCONNECTED" not in m.text
+    # Los provoca el corte de red simulado de la prueba sin señal, no la app: el navegador y Firestore avisan que no hay red.
+    pg.on("console", lambda m: (consola.append(m.text), m.type == "error" and not any(x in m.text for x in SIN_RED)
                                 and errores.append(m.text)))
     pg.on("pageerror", lambda e: errores.append(str(e)))
     pg.on("response", lambda r: r.status >= 400 and r.url.startswith(BASE) and errores.append(f"{r.status} {r.url}"))
@@ -417,7 +422,15 @@ with sync_playwright() as p:
             pc, cc, cap_c = abrir(ctx_cliente, f"cliente-{disp}")
             link = RECORRIDOS[disp](pc, f"cliente-{disp}", cc, cap_c)
             id_ = link.split("pedido=")[1]
-            expect(pp.locator(f'li[data-id="{id_}"]')).to_have_attribute("data-nuevo", "true", timeout=60000)
+            if moto:
+                # En el celular el pedido llega con el panel en Motoqueros: tiene que sonar igual, sin volver a Pedidos.
+                try:
+                    pp.wait_for_function("n => Number(document.body.dataset.sonidos || 0) > n", arg=sonidos, timeout=60000)
+                except TiempoAgotado:
+                    problemas.append(f"panel-{disp}: llegó un pedido nuevo con el panel en Motoqueros y no sonó")
+                tocar(pp.get_by_role("button", name="Pedidos", exact=True))
+            expect(pp.locator(f'li[data-id="{id_}"]')).to_be_visible(timeout=60000)
+            expect(pp.locator(f'li[data-id="{id_}"]')).to_have_attribute("data-nuevo", "true")
             if int(pp.evaluate("document.body.dataset.sonidos || '0'")) <= sonidos:
                 problemas.append(f"panel-{disp}: llegó un pedido nuevo y no sonó")
             if not pp.title().startswith("("):

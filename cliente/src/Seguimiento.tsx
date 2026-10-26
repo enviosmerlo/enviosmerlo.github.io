@@ -3,18 +3,12 @@ import { useEffect, useState, type ReactNode } from "react";
 import { db } from "../../compartido/firebase";
 import { Marca, NOMBRE } from "../../compartido/marca";
 import { ESTADOS, ID_VALIDO, linkDelPedido, TIPOS, type Estado, type Pedido } from "../../compartido/pedido";
+import { pesos } from "../../compartido/precio";
 import { useServicio } from "../../compartido/servicio";
-import { Icono, Sierras, type NombreIcono } from "../../compartido/ui";
-import { ALTO, COLUMNA, FOCO, Letra, pesos, precioTexto } from "./Formulario";
+import { ALTO, COLUMNA, FOCO, Icono, ICONO_ESTADO, Letra, Sierras } from "../../compartido/ui";
+import { precioTexto } from "./Formulario";
 
 const AVANCE: Estado[] = ["recibido", "asignado", "en_camino", "entregado"];
-const ICONO: Record<Estado, NombreIcono> = {
-  recibido: "reloj",
-  asignado: "persona",
-  en_camino: "moto",
-  entregado: "tilde",
-  cancelado: "cruz",
-};
 
 // El encabezado toma el color del estado: terracota mientras viaja, verde entregado, rojo cancelado.
 type Tono = { fondo: string; rotulo: string; titulo: string; circulo: string; lejos: string; medio: string };
@@ -113,7 +107,7 @@ export default function Seguimiento({ id }: { id: string }) {
       tono={tono}
       circulo={
         <span className={`mt-1 grid size-16 shrink-0 place-items-center rounded-full text-[#FFF8EE] ${tono.circulo}`}>
-          <Icono nombre={ICONO[pedido.estado] ?? "reloj"} className="size-10" />
+          <Icono nombre={ICONO_ESTADO[pedido.estado] ?? "reloj"} className="size-10" />
         </span>
       }
       cabeza={
@@ -163,7 +157,7 @@ export default function Seguimiento({ id }: { id: string }) {
                     }`}
                   >
                     <Icono
-                      nombre={hecho ? "tilde" : e === "entregado" ? "pin" : ICONO[e]}
+                      nombre={hecho ? "tilde" : e === "entregado" ? "pin" : ICONO_ESTADO[e]}
                       className={hecho || ahora ? "size-5" : "size-4"}
                     />
                   </span>
