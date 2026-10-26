@@ -96,6 +96,18 @@ con fecha en el doc de registro.
 - [ ] Motoqueros: alta, baja, teléfono y si está activo hoy.
 - [ ] Tarifa: bajada, precio por km, mínimo y factor por calles, editables desde el panel.
 
+### Diseño Sierra (entre la 2 y la 3, antes de publicar el panel)
+Pedido de Matías el 25/10/2026: que no parezca "hecho con IA". Eligió la dirección Sierra entre tres maquetas
+(`capturas/maquetas/`, no se suben al repo), para el cliente y el panel, con los subtítulos de los tipos y sin frase bajo la marca.
+- [ ] Base común: colores tierra, Alegreya y Alegreya Sans, logo provisorio y íconos propios.
+- [ ] Cliente y panel rediseñados, comparados con la maqueta.
+- [ ] Control automático y revisión adversarial sobre el código final, y salida al real junto con el panel.
+
+### Pantalla del motoquero (pedido de Matías el 25/10/2026, a planificar después del diseño)
+- [ ] Cuando entra un pedido, les salta a todos los motoqueros activos y lo agarra el primero que acepta.
+Limitación ya conocida: que el aviso salte con el celular bloqueado necesita notificaciones push, y eso pide pasar a Blaze
+(servidor propio). Que solo uno gane se puede hacer sin servidor, con una transacción de Firestore. Preguntas y plan antes de codear.
+
 ### Actualización 3: historial y caja
 - [ ] Envíos por día y por motoquero.
 - [ ] Total movido y tu comisión, con el porcentaje que elijas.
@@ -136,7 +148,7 @@ con fecha en el doc de registro.
 
 ## Queda para después de la prueba
 
-- La pantalla del motoquero con su ubicación en vivo.
+- La ubicación en vivo del motoquero (la pantalla para aceptar pedidos se adelanta: ver arriba).
 - Pasajeros, cuando haya habilitación y seguro.
 - Cobro con Mercado Pago dentro de la app.
 - Apps en Play Store y App Store.

@@ -173,7 +173,9 @@ def pedido_con_mapa(pg, nombre, consola, cap):
     pg.get_by_role("button", name="Siguiente").click()
     expect(pg.get_by_text("Revisá tu pedido")).to_be_visible()
     if not PUBLICADA:  # con la tarifa de prueba (mínimo 98765) el estimado no depende de dónde cayeron los puntos
-        expect(pg.get_by_text("$ 98.765 (estimado)")).to_be_visible()
+        # En el remito el precio va grande y solo, con "estimado" como rótulo al lado.
+        expect(pg.get_by_text("$ 98.765", exact=True)).to_be_visible()
+        expect(pg.get_by_text("estimado", exact=True)).to_be_visible()
     cap("5-revisar")
     comunes(pg, f"{nombre} revisar")
     return None if PUBLICADA else confirmar(pg, nombre, consola, cap)

@@ -2,12 +2,13 @@ import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { collection, onSnapshot } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { db } from "../../compartido/firebase";
-import { NOMBRE } from "../../compartido/marca";
+import { Icono } from "../../compartido/ui";
 import { auth } from "./auth";
 import Login from "./Login";
 import Motoqueros, { type Motoquero } from "./Motoqueros";
 import Pedidos from "./Pedidos";
 import Servicio from "./Servicio";
+import { COLUMNA, Encabezado, FOCO } from "./ui";
 
 const VISTAS = { pedidos: "Pedidos", motoqueros: "Motoqueros", tarifa: "Tarifa" } as const;
 type Vista = keyof typeof VISTAS;
@@ -22,7 +23,8 @@ export default function App() {
 // Un listener que falla queda muerto: en vez de una lista vacía que nunca suena, un cartel que se ve.
 export function Cartel({ error }: { error: { code?: string } }) {
   return (
-    <p className="rounded-2xl border border-acento bg-white p-4 font-medium text-acento" role="alert" data-cartel>
+    <p className="mt-3 flex gap-2.5 rounded-[18px] border-[1.5px] border-rojo bg-rojo-cl p-4 text-[17px] leading-snug font-bold text-rojo" role="alert" data-cartel>
+      <Icono nombre="cruz" className="mt-0.5 size-5" />
       {error.code === "permission-denied"
         ? "Esta cuenta no tiene permiso para usar el panel."
         : "Se cortó la conexión con los pedidos. Recargá la página."}
@@ -34,6 +36,7 @@ function Panel() {
   const [vista, setVista] = useState<Vista>("pedidos");
   const [motoqueros, setMotoqueros] = useState<Motoquero[]>([]);
   const [error, setError] = useState<{ code?: string } | null>(null);
+  const [esperando, setEsperando] = useState(0); // lo cuenta Pedidos, para el número de la pestaña
 
   useEffect(
     () =>
@@ -46,37 +49,40 @@ function Panel() {
   );
 
   return (
-    <main className="mx-auto min-h-svh max-w-2xl px-4 pb-10">
-      <header className="flex items-center justify-between py-4">
-        <h1 className="text-lg font-bold">
-          {NOMBRE} <span className="font-normal text-suave">· Panel</span>
-        </h1>
-        <button type="button" onClick={() => signOut(auth)} className="text-sm font-medium text-suave underline">
-          Salir
-        </button>
-      </header>
-      <nav className="mb-4 flex gap-2">
-        {(Object.keys(VISTAS) as Vista[]).map((v) => (
-          <button
-            key={v}
-            type="button"
-            onClick={() => setVista(v)}
-            aria-pressed={vista === v}
-            className={`flex-1 rounded-xl py-2.5 font-semibold ${vista === v ? "bg-tinta text-white" : "border border-linea bg-white"}`}
-          >
-            {VISTAS[v]}
-          </button>
-        ))}
-      </nav>
-      {error ? (
-        <Cartel error={error} />
-      ) : vista === "pedidos" ? (
-        <Pedidos motoqueros={motoqueros} />
-      ) : vista === "motoqueros" ? (
-        <Motoqueros motoqueros={motoqueros} />
-      ) : (
-        <Servicio />
-      )}
+    <main className={COLUMNA}>
+      <Encabezado salir={() => signOut(auth)} />
+      <div className="px-4">
+        <nav className="flex gap-1 rounded-[14px] bg-[#E8DDCB] p-1">
+          {(Object.keys(VISTAS) as Vista[]).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setVista(v)}
+              aria-pressed={vista === v}
+              className={`flex h-11 flex-1 items-center justify-center gap-1.5 rounded-[11px] text-[16px] ${
+                vista === v ? "bg-papel font-extrabold shadow-[0_1px_2px_rgba(43,33,24,.18)]" : "font-bold text-[#5A4A3B]"
+              } ${FOCO}`}
+            >
+              {VISTAS[v]}
+              {/* El número va aparte del nombre: la pestaña se llama "Pedidos" para el lector de pantalla y el título lo cuenta. */}
+              {v === "pedidos" && esperando > 0 && (
+                <span aria-hidden="true" className="grid h-5 min-w-5 place-items-center rounded-full bg-terra px-1.5 text-[12.5px] font-extrabold text-[#FFF8EE]">
+                  {esperando}
+                </span>
+              )}
+            </button>
+          ))}
+        </nav>
+        {error ? (
+          <Cartel error={error} />
+        ) : vista === "pedidos" ? (
+          <Pedidos motoqueros={motoqueros} alContar={setEsperando} />
+        ) : vista === "motoqueros" ? (
+          <Motoqueros motoqueros={motoqueros} />
+        ) : (
+          <Servicio />
+        )}
+      </div>
     </main>
   );
 }

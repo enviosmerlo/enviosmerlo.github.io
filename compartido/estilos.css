@@ -3,23 +3,64 @@
 @source "../panel";
 @source "./";
 
-/* Colores provisorios hasta la actualización de marca */
+/* Diseño Sierra: los colores de las sierras de Merlo. Provisorio hasta la actualización de marca. */
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --color-fondo: #f7f5f0;
-  --color-tinta: #1b1b1f;
-  --color-suave: #66656d;
-  --color-acento: #ff5a1f;
-  --color-linea: rgb(27 27 31 / 0.12);
+  --font-display: "Alegreya", Georgia, serif; /* títulos, logo, precios y el estado grande */
+  --font-sans: "Alegreya Sans", system-ui, sans-serif; /* texto, botones y datos */
+
+  --color-arena: #f3ebdd; /* fondo */
+  --color-papel: #fffaf2; /* tarjetas, campos, remito */
+  --color-tinta: #2b2118; /* texto */
+  --color-tierra: #6a5847; /* texto secundario y rótulos */
+  --color-linea: #e2d5c0; /* bordes y divisores */
+  --color-linea-osc: #d5c6ad;
+  --color-terra: #a8472a; /* acción principal, punto A, paso actual */
+  --color-terra-osc: #8e3a20; /* links, "Merlo" del logo, En camino */
+  --color-terra-cl: #f3dacb;
+  --color-ocre: #d99a2b; /* pedido nuevo, sol */
+  --color-ocre-osc: #6b4708;
+  --color-ocre-cl: #f6e4bc;
+  --color-monte: #3d5638; /* WhatsApp, lo hecho, punto B, encabezado del panel */
+  --color-monte-osc: #2f4a2b;
+  --color-monte-cl: #dce5d2;
+  --color-piedra: #34495a;
+  --color-piedra-cl: #dce4e6;
+  --color-cielo: #f5e1ba;
+  --color-rojo: #a3271b; /* solo errores y Cancelado, separado del color de acción */
+  --color-rojo-cl: #f8dfd9;
 }
 
 html {
-  background: var(--color-fondo);
+  background: var(--color-arena);
   color: var(--color-tinta);
 }
 
 body {
   margin: 0;
   font-family: var(--font-sans);
+  font-variant-numeric: lining-nums;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Íconos de línea (compartido/ui.tsx): el color sale de currentColor. */
+.ico {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ico-g {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tono {
+  fill: var(--tono, none);
+  stroke: none;
+}
+.num {
+  font-variant-numeric: tabular-nums;
 }
