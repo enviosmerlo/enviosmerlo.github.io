@@ -4,28 +4,35 @@
 > Doc de Claude Docs: project 953799dd-fa09-488b-931a-0f0c5e488f56 · nodo de la pestaña fb5f394b-821e
 > Al terminar cada paso: tildarlo en el doc (listItem `checked: true`) y sumar una fila al Registro (lo más nuevo arriba).
 
-## Estado al 25/10/2026
+## Estado al 26/10/2026
 
-- **Actualización 0 terminada. Actualización 1 publicada**, salvo dos datos que tiene que pasar Matías:
-  la tarifa (`TARIFA` en `compartido/precio.ts`; hasta entonces el precio dice "a confirmar por WhatsApp") y el
-  WhatsApp del servicio (`WHATSAPP` en `compartido/marca.ts`; hasta entonces el botón no aparece). Sigue la Actualización 2.
-- Repo público `matitrova/envios` (la cuenta de GitHub es `matitrova`; `matitrovato` es solo el usuario de la Mac).
-  Cada push a `main` publica solo con Actions (`.github/workflows/publicar.yml`), con `scripts/chequeos.ts` antes del build.
-- Dirección provisoria: https://matitrova.github.io/envios/ (cliente) y https://matitrova.github.io/envios/panel/ (panel).
+- **Actualizaciones 0, 1 y 2 publicadas, con el diseño Sierra.** Sigue la pantalla del motoquero (a planificar).
+  Pendiente de Matías: cargar la tarifa y el WhatsApp del servicio en el panel (pestaña Tarifa; hasta entonces el precio
+  dice "a confirmar por WhatsApp" y el botón no aparece) y probar el aviso sonoro en su celular.
+- Repo público `enviosmerlo/enviosmerlo.github.io`, en la organización `enviosmerlo` que creó Matías (su cuenta personal de
+  GitHub es `matitrova`; `matitrovato` es solo el usuario de la Mac). Cada push a `main` publica solo con Actions
+  (`.github/workflows/publicar.yml`), con `scripts/chequeos.ts` antes del build.
+- Dirección provisoria: https://enviosmerlo.github.io/ (cliente) y https://enviosmerlo.github.io/panel/ (panel). Es una
+  dirección solo de la app: la sesión del operador no la comparte con otras páginas. La vieja (matitrova.github.io/envios) da 404.
 - Firebase (cuenta de Google de Matías, plan Spark, sin Analytics ni Gemini): `envios-merlo` (real) y
   `envios-merlo-pruebas`. Firestore Standard en `southamerica-east1` en los dos (São Paulo: desde San Luis respondió
   ~10 ms más rápido que Santiago). App web `envios-web` registrada en cada uno; la config está en `compartido/firebase.ts`,
-  que elige el proyecto por dominio (solo `matitrova.github.io` va al real).
-- Reglas (`firestore.rules`): el link `?pedido=<ID>` es la llave (get público, list/update/delete negados), create validado.
-  Se suben con `npm run reglas:pruebas` / `npm run reglas:real` (Firebase CLI con versión fija, el proyecto escrito
-  entero; sin `firebase use` ni `.firebaserc`, para que nada caiga en el real por descuido).
+  que elige el proyecto por dominio (solo `enviosmerlo.github.io` va al real).
+- Login del panel: email y contraseña. En el real, el alta y el borrado de cuentas por el usuario están desactivados
+  (Authentication > Configuración > Acciones del usuario); la cuenta de Matías la creó él en la consola. Política: mínimo 8.
+- Reglas (`firestore.rules`): el link `?pedido=<ID>` es la llave (get público); create validado; el operador (por uid:
+  Matías en el real, el operador de prueba en pruebas) lista, asigna, cambia estados, carga motoqueros y `/config/servicio`.
+  Reglas e índice se suben con `npm run reglas:pruebas` / `npm run reglas:real` (Firebase CLI con versión fija, el proyecto
+  escrito entero; sin `firebase use` ni `.firebaserc`). El índice nuevo tarda unos 4-5 minutos en activarse.
 - Cómo se prueba (nunca contra el real):
-  - `python3 scripts/probar_reglas.py`: 31 casos con escrituras de verdad en pruebas, sin sesión.
-  - `npm run build && ../Test1_Inmo/.venv/bin/python scripts/verificar.py`: pedidos de verdad en pruebas, en celular
-    (GPS y toque en el mapa) y computadora (solo referencias y corte de señal), y el link en un navegador limpio.
-  - `URL=https://matitrova.github.io/envios/ ../Test1_Inmo/.venv/bin/python scripts/verificar.py`: la dirección real,
-    solo lectura (no confirma pedidos); corta si al real le faltan las reglas.
-- Pendiente anotado: App Check (reCAPTCHA) antes del piloto; el JS del cliente pesa ~193 kB comprimido (Firebase + Leaflet).
+  - `python3 scripts/cuentas_prueba.py`: crea (una vez) el operador de prueba y un intruso, solo en pruebas (`.env.pruebas`).
+  - `python3 scripts/probar_reglas.py`: escrituras de verdad en pruebas, sin sesión, como operador y como intruso.
+  - `npm run build && ../Test1_Inmo/.venv/bin/python scripts/verificar.py`: cliente y panel a la vez en pruebas, en celular
+    y computadora (pedido nuevo que suena, asignar, WhatsApp al motoquero, estados en vivo, cancelar, motoqueros, tarifa, intruso).
+  - `URL=https://enviosmerlo.github.io/ ../Test1_Inmo/.venv/bin/python scripts/verificar.py`: la dirección real,
+    solo lectura (no confirma pedidos ni entra al panel); corta si al real le faltan las reglas.
+- Pendientes anotados: App Check (reCAPTCHA) antes del piloto, porque hoy cualquiera puede crear pedidos sin límite; el JS
+  del cliente pesa ~193 kB comprimido (Firebase + Leaflet).
 
 
 ## Contexto
@@ -89,19 +96,19 @@ con fecha en el doc de registro.
 - [ ] Botón de WhatsApp al servicio como respaldo. (Hecho; falta el número.)
 
 ### Actualización 2: tu panel
-- [ ] Tu usuario. La contraseña la elegís vos la primera vez; yo no la escribo.
-- [ ] Pedidos en vivo con aviso sonoro.
-- [ ] Asignar motoquero y botón que abre WhatsApp con el pedido armado para él.
-- [ ] Cambiar estado y cancelar con motivo.
-- [ ] Motoqueros: alta, baja, teléfono y si está activo hoy.
-- [ ] Tarifa: bajada, precio por km, mínimo y factor por calles, editables desde el panel.
+- [x] Tu usuario. La contraseña la elegís vos la primera vez; yo no la escribo.
+- [ ] Pedidos en vivo con aviso sonoro. (Hecho y probado; falta la prueba en el celular de Matías.)
+- [x] Asignar motoquero y botón que abre WhatsApp con el pedido armado para él.
+- [x] Cambiar estado y cancelar con motivo.
+- [x] Motoqueros: alta, baja, teléfono y si está activo hoy.
+- [x] Tarifa: bajada, precio por km, mínimo y factor por calles, editables desde el panel.
 
-### Diseño Sierra (entre la 2 y la 3, antes de publicar el panel)
+### Diseño Sierra (entre la 2 y la 3, publicado con el panel)
 Pedido de Matías el 25/10/2026: que no parezca "hecho con IA". Eligió la dirección Sierra entre tres maquetas
 (`capturas/maquetas/`, no se suben al repo), para el cliente y el panel, con los subtítulos de los tipos y sin frase bajo la marca.
-- [ ] Base común: colores tierra, Alegreya y Alegreya Sans, logo provisorio y íconos propios.
-- [ ] Cliente y panel rediseñados, comparados con la maqueta.
-- [ ] Control automático y revisión adversarial sobre el código final, y salida al real junto con el panel.
+- [x] Base común: colores tierra, Alegreya y Alegreya Sans, logo provisorio y íconos propios.
+- [x] Cliente y panel rediseñados, comparados con la maqueta.
+- [x] Control automático y revisión adversarial sobre el código final, y salida al real junto con el panel.
 
 ### Pantalla del motoquero (pedido de Matías el 25/10/2026, a planificar después del diseño)
 - [ ] Cuando entra un pedido, les salta a todos los motoqueros activos y lo agarra el primero que acepta.
