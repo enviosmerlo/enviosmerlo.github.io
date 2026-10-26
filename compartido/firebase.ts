@@ -23,7 +23,8 @@ const PRUEBAS = {
 // La lista es de los dominios REALES, a propósito: un dominio inesperado (localhost, el del control automático,
 // uno nuevo) cae en pruebas y se ve vacío, en vez de escribir en silencio en los datos reales.
 // Con el dominio propio (Actualización 4) hay que sumarlo acá; el control contra la dirección publicada lo avisa.
-const DOMINIOS_REALES = ["matitrova.github.io"];
+// enviosmerlo.github.io es una dirección solo de esta app: la sesión del operador no la comparte con otras páginas.
+const DOMINIOS_REALES = ["enviosmerlo.github.io"];
 
 const config = DOMINIOS_REALES.includes(location.hostname) ? REAL : PRUEBAS;
 // scripts/verificar.py lee esta línea para saber a qué base se conectó antes de crear un pedido.

@@ -30,7 +30,7 @@ service cloud.firestore {
     function esOperador() {
       return request.auth != null && request.auth.uid in [
         'uOCsQQh6yscnpPPh8hjbC4HB9Ju1', // operador de prueba
-        'PENDIENTE-UID-DE-MATIAS'       // se completa cuando Matías cree su usuario en el real
+        'GQgeTXaMMOZKBwbIqw3u4PO0Ckk2'  // Matías (matitrova13@gmail.com), solo existe en envios-merlo
       ];
     }
 

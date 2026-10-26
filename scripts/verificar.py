@@ -7,7 +7,7 @@ de cuentas_prueba.py) los ve llegar como nuevos, asigna, cambia estados y cancel
 Contra la dirección publicada recorre lo mismo pero NO confirma ni entra al panel: nunca escribe en el proyecto real.
 
 Uso:  npm run build && ../Test1_Inmo/.venv/bin/python scripts/verificar.py [carpeta-de-capturas]
-Contra la dirección publicada:  URL=https://matitrova.github.io/envios/ ../Test1_Inmo/.venv/bin/python scripts/verificar.py
+Contra la dirección publicada:  URL=https://enviosmerlo.github.io/ ../Test1_Inmo/.venv/bin/python scripts/verificar.py
 """
 import base64
 import json
